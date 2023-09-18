@@ -1,0 +1,127 @@
+import "naughty"
+
+const try_or_warn = (fn) ->
+	success, theme = try
+		fn()
+	catch err
+		naughty.notification {
+			timeout: 0
+			message: "Could not load theme: #{err}\nNote: This error will <i>not</i> stop awesome from continuing to load the rest of your configuration."
+		}
+	
+	if success
+		theme
+
+<- try_or_warn()
+
+import "beautiful.theme_assets"
+import "ruled.notification" as rnotification
+const dpi = require("beautiful.xresources").apply_dpi
+
+import "gears.filesystem"
+const theme_path = filesystem.get_configuration_dir() .. "themes/dracula/"
+
+const t = {}
+
+t.font = "sans " .. tostring(math.floor(dpi(12) + 0.5))
+
+t.bg_normal   = "#282a36"
+t.bg_focus    = "#44475a"
+t.bg_urgent   = "#ff5555"
+t.bg_minimize = "#bd93f9"
+
+t.fg_normal   = "#f8f8f2"
+t.fg_focus    = "#f8f8f2"
+t.fg_urgent   = "#282a36"
+t.fg_minimize = "#282a36"
+
+t.bg_systray  = t.bg_normal
+
+t.useless_gap         = dpi(5)
+t.border_width        = dpi(1)
+t.border_color_normal = "#44475a"
+t.border_color_active = "#44475a"
+t.border_color_marked = "#44475a"
+
+--- There are other variable sets overriding the default one when defined, the sets are:
+--- taglist_[bg|fg]_[focus|urgent|occupied|empty|volatile]
+--- tasklist_[bg|fg]_[focus|urgent]
+--- titlebar_[bg|fg]_[normal|focus]
+--- tooltip_[font|opacity|fg_color|bg_color|border_width|border_color]
+--- prompt_[fg|bg|fg_cursor|bg_cursor|font]
+--- hotkeys_[bg|fg|border_width|border_color|shape|opacity|modifiers_fg|label_bg|label_fg|group_margin|font|description_font]
+
+const taglist_square_size = dpi(128)
+t.taglist_squares_sel = theme_assets.taglist_squares_sel(taglist_square_size, t.fg_normal)
+t.taglist_squares_unsel = theme_assets.taglist_squares_unsel(taglist_square_size, t.fg_normal)
+
+-- Variables set for theming notifications:
+-- notification_font
+-- notification_[bg|fg]
+-- notification_[width|height|margin]
+-- notification_[border_color|border_width|shape|opacity]
+
+-- Variables set for theming the menu:
+-- menu_[bg|fg]_[normal|focus]
+-- menu_[border_color|border_width]
+--t.menu_submenu_icon = theme_path .. "submenu.png"
+t.menu_height = dpi( 30)
+t.menu_width  = dpi(200)
+
+t.titlebar_close_button_normal = theme_path .. "titlebar/close_normal.png"
+t.titlebar_close_button_focus  = theme_path .. "titlebar/close_focus.png"
+
+t.titlebar_minimize_button_normal = theme_path .. "titlebar/minimize_normal.png"
+t.titlebar_minimize_button_focus  = theme_path .. "titlebar/minimize_focus.png"
+
+t.titlebar_ontop_button_normal_inactive = theme_path .. "titlebar/ontop_normal_inactive.png"
+t.titlebar_ontop_button_focus_inactive  = theme_path .. "titlebar/ontop_focus_inactive.png"
+t.titlebar_ontop_button_normal_active   = theme_path .. "titlebar/ontop_normal_active.png"
+t.titlebar_ontop_button_focus_active    = theme_path .. "titlebar/ontop_focus_active.png"
+
+t.titlebar_sticky_button_normal_inactive = theme_path .. "titlebar/sticky_normal_inactive.png"
+t.titlebar_sticky_button_focus_inactive  = theme_path .. "titlebar/sticky_focus_inactive.png"
+t.titlebar_sticky_button_normal_active   = theme_path .. "titlebar/sticky_normal_active.png"
+t.titlebar_sticky_button_focus_active    = theme_path .. "titlebar/sticky_focus_active.png"
+
+t.titlebar_floating_button_normal_inactive = theme_path .. "titlebar/floating_normal_inactive.png"
+t.titlebar_floating_button_focus_inactive  = theme_path .. "titlebar/floating_focus_inactive.png"
+t.titlebar_floating_button_normal_active   = theme_path .. "titlebar/floating_normal_active.png"
+t.titlebar_floating_button_focus_active    = theme_path .. "titlebar/floating_focus_active.png"
+
+t.titlebar_maximized_button_normal_inactive = theme_path .. "titlebar/maximized_normal_inactive.png"
+t.titlebar_maximized_button_focus_inactive  = theme_path .. "titlebar/maximized_focus_inactive.png"
+t.titlebar_maximized_button_normal_active   = theme_path .. "titlebar/maximized_normal_active.png"
+t.titlebar_maximized_button_focus_active    = theme_path .. "titlebar/maximized_focus_active.png"
+
+t.wallpaper = theme_path .. "background_transparent.png"
+
+t.layout_fairh      = theme_path .. "layouts/fairhw.png"
+t.layout_fairv      = theme_path .. "layouts/fairvw.png"
+t.layout_floating   = theme_path .. "layouts/floatingw.png"
+t.layout_magnifier  = theme_path .. "layouts/magnifierw.png"
+t.layout_max        = theme_path .. "layouts/maxw.png"
+t.layout_fullscreen = theme_path .. "layouts/fullscreenw.png"
+t.layout_tilebottom = theme_path .. "layouts/tilebottomw.png"
+t.layout_tileleft   = theme_path .. "layouts/tileleftw.png"
+t.layout_tile       = theme_path .. "layouts/tilew.png"
+t.layout_tiletop    = theme_path .. "layouts/tiletopw.png"
+t.layout_spiral     = theme_path .. "layouts/spiralw.png"
+t.layout_dwindle    = theme_path .. "layouts/dwindlew.png"
+t.layout_cornernw   = theme_path .. "layouts/cornernww.png"
+t.layout_cornerne   = theme_path .. "layouts/cornernew.png"
+t.layout_cornersw   = theme_path .. "layouts/cornersww.png"
+t.layout_cornerse   = theme_path .. "layouts/cornersew.png"
+
+t.awesome_icon = theme_assets.awesome_icon(t.menu_height, t.bg_focus, t.fg_focus)
+
+t.icon_theme = "Papirus-dark"
+
+rnotification.connect_signal("request::rules", () ->
+	rnotification.append_rule {
+		rule:       { urgency: "critical" }
+		properties: { bg: t.bg_urgent, fg: t.fg_urgent }
+	}
+)
+
+t

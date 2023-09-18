@@ -1,0 +1,44 @@
+import "lgi"
+import cairo, GLib, Gio from lgi
+const Gtk = lgi.require("Gtk", "3.0")
+const Gdk = lgi.require("Gdk", "3.0")
+
+export lookup_icon = (icon_name) ->
+	if not icon_name
+		return
+
+	const icon_theme = Gtk.IconTheme.get_default()
+
+	if not icon_theme
+		return
+
+	const icon = icon_theme::lookup_icon(icon_name, 48, 0)
+
+	if not icon
+		return
+
+	icon::get_filename()
+
+export lookup_gicon = (gicon) ->
+	if not gicon
+		return
+
+	if type(gicon) == "string"
+		return gicon
+
+	const icon_theme = Gtk.IconTheme.get_default()
+
+	if not icon_theme
+		return
+
+	const icon = icon_theme::lookup_by_gicon(gicon, 48, 0)
+
+	if not icon
+		return
+
+	icon::get_filename()
+
+const dpi = require("beautiful.xresources").apply_dpi(1)
+export scale = (value, s=screen.primary) ->
+	const screen_scale = s.scaling_factor ?? 1
+	value * screen_scale * dpi
