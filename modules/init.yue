@@ -1,1 +1,2 @@
-export lib = require("modules.lib")
+export core = require("modules.core")
+export lib  = require("modules.lib")

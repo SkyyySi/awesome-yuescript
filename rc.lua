@@ -1,6 +1,6 @@
 do
 	local success
-	success = pcall(require, "init")
+	success = pcall(require("yue"), "init")
 
 	if success then
 		return

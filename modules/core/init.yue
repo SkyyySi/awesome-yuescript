@@ -1,0 +1,1 @@
+export input_bindings = require("modules.core.input_bindings")
