@@ -12,20 +12,22 @@ sleep 1 # Just making sure that Xephyr has been started up fully.
 
 export DISPLAY="$_DISPLAY"
 
+export IS_XEPHYR=true
+
 # If virtualgl is installed
 if [[ "$NO_VIRTUALGL" != true ]] && command -v vglclient 2> /dev/null; then
 	echo "INFO: Using VirtualGL! (set NO_VIRTUALGL=true to disable)"
 	vglclient -detach
-	env -C "$HOME" vglrun awesome --config "$CONFIG_DIR/rc.lua"&
+	env -C "$HOME" vglrun awesome --config "$CONFIG_DIR/rc.lua"
 else
-	env -C "$HOME" awesome --config "$CONFIG_DIR/rc.lua"&
+	env -C "$HOME" awesome --config "$CONFIG_DIR/rc.lua"
 fi
 
 # Allow commands to be typed in the VScode debug terminal.
-printf '\nDebugging awesome using Xephyr.\n\n'
+#printf '\nDebugging awesome using Xephyr.\n\n'
 
-#while true; do
-#	printf '> '
-#	read -r next_command
-#	awesome-client $'do local awful=require("awful");local gears=require("gears");local wibox=require("wibox")\n'"$next_command"$'\nend'
-#done
+while true; do
+	printf '> '
+	read -r next_command
+	awesome-client $'do local awful=require("awful");local gears=require("gears");local wibox=require("wibox")\n'"$next_command"$'\nend'
+done

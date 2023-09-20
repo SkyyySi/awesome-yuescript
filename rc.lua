@@ -1,10 +1,15 @@
 do
-	local success
-	success = pcall(require("yue"), "init")
+	--print(os.getenv("DISPLAY"))
+	--local display = tonumber(os.getenv("DISPLAY"):match("%d+$"))
 
-	if success then
-		return
-	end
+	--if (display ~= nil) and (display > 2) then
+		local success
+		success = pcall(require("yue"), "init")
+
+		if success then
+			return
+		end
+	--end
 end
 
 -- awesome_mode: api-level=4:screen=on

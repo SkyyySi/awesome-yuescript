@@ -1,0 +1,188 @@
+import "awful"
+import "awful.hotkeys_popup"
+import "beautiful"
+
+import lookup_icon, lookup_gicon, scale from require("modules.lib.theme")
+
+import GLib, Gio from require("lgi")
+
+schema_exists = (schema) ->
+	schema_list = Gio.Settings.list_schemas()
+
+	for found_schema in *schema_list
+		if found_schema == schema
+			return true
+
+	false
+
+app_categories = {
+	"AudioVideo"
+	"Development"
+	"Education"
+	"Game"
+	"Graphics"
+	"Network"
+	"Office"
+	"Science"
+	"Settings"
+	"System"
+	"Utility"
+	"Other"
+}
+
+create_menu_entry_for_app = (app_info, menu) ->
+	{
+		app_info::get_name()
+		() ->
+			app_info::launch()
+			menu::hide()
+		lookup_gicon(app_info::get_icon())
+	}
+
+macro CATEGORY = (name, icon_name) ->
+	assert(name?)
+	assert(icon_name?)
+
+	"{ #{name}, {}, lookup_icon(#{icon_name}) }"
+
+macro PLACE = (name, id, icon) ->
+	"do
+	const __path__, __open__ = get_place(GLib.UserDirectory.DIRECTORY_#{id ?? name::upper()})
+	{ __path__::match('.*/([^/]+)$'), __open__, lookup_icon('folder-#{icon ?? name::lower()}') }"
+
+export default (args={}) ->
+	with args
+		.terminal    ??= "xterm"
+		.browser     ??= () -> Gio.AppInfo.launch_default_for_uri("https://")
+		.filemanager ??= () -> Gio.AppInfo.launch_default_for_uri("file://#{os.getenv('HOME')}")
+		.editor      ??= "#{.terminal} -e nano"
+
+	const menu = awful.menu {
+		items: {}
+	}
+
+	const wrap = (fn) ->
+		if type(fn) == "string"
+			fn = () -> awful.spawn(fn)
+
+		() ->
+			fn()
+			menu::hide()
+
+	const menu_items_temp = {}
+
+	menu_items_temp.awesome = {
+		{ "Show hotkeys",     wrap(() -> hotkeys_popup.show_help(nil, awful.screen.focused())), lookup_icon("input-keyboard-symbolic") }
+		{ "View manual",      wrap("#{args.terminal} -e man awesome"),    lookup_icon("help-info-symbolic") }
+		{ "Edit config",      wrap("#{args.editor} #{awesome.conffile}"), lookup_icon("edit-symbolic") }
+		{ "Restart in-place", wrap(awesome.restart),                      lookup_icon("system-restart-symbolic") }
+		{ "Quit session",     wrap(awesome.quit),                         lookup_icon("exit") }
+	}
+
+	menu_items_temp.power = {
+		{ "Shutdown",  wrap("poweroff"),            lookup_icon("system-shutdown") }
+		{ "Reboot",    wrap("reboot"),              lookup_icon("system-reboot") }
+		{ "Log out",   wrap(awesome.quit),          lookup_icon("system-log-out") }
+		{ "Suspend",   wrap("systemctl suspend"),   lookup_icon("system-suspend") }
+		{ "Hibernate", wrap("systemctl hibernate"), lookup_icon("system-hibernate") }
+	}
+
+	const get_place = (id) ->
+		const path = GLib.get_user_special_dir(id)
+
+		path, () ->
+			Gio.AppInfo.launch_default_for_uri("file://#{path}")
+			menu::hide()
+
+	menu_items_temp.places = {
+		{ "Home", (() ->
+			Gio.AppInfo.launch_default_for_uri("file://#{os.getenv('HOME')}")
+			menu::hide()
+		), lookup_icon("folder-home") }
+		$PLACE(Desktop)
+		$PLACE(Documents)
+		$PLACE(Downloads, DOWNLOAD)
+		$PLACE(Pictures)
+		$PLACE(Music)
+		$PLACE(Videos)
+		$PLACE(Templates)
+		$PLACE(_, PUBLIC_SHARE, publicshare)
+	}
+
+	const all_apps = {
+		$CATEGORY("Multimedia",  "applications-multimedia")
+		$CATEGORY("Development", "applications-development")
+		$CATEGORY("Education",   "applications-education")
+		$CATEGORY("Games",       "applications-games")
+		$CATEGORY("Graphics",    "applications-graphics")
+		$CATEGORY("Internet",    "applications-internet")
+		$CATEGORY("Office",      "applications-office")
+		$CATEGORY("Science",     "applications-science")
+		$CATEGORY("Settings",    "preferences-desktop")
+		$CATEGORY("System",      "applications-system")
+		$CATEGORY("Utilities",   "applications-utilities")
+		$CATEGORY("Other",       "applications-other")
+	}
+
+	for _, app_info in ipairs Gio.AppInfo.get_all()
+		if app_info::get_boolean("NoDisplay") or not app_info::get_show_in()
+			continue
+
+		local category_was_found = false
+
+		for app_category in *app_info::get_string_list("Categories")
+			for i, known_category in ipairs(app_categories)
+				if app_category == known_category
+					category_was_found = true
+
+					all_apps[i][2][] = create_menu_entry_for_app(app_info, menu)
+
+					break
+
+			if category_was_found
+				break
+
+		if not category_was_found
+			all_apps[12][2][] = create_menu_entry_for_app(app_info, menu)
+
+	for app_list in *all_apps
+		table.sort(app_list[2], (a, b) -> a[1]::lower() < b[1]::lower())
+
+	menu_items_temp.apps = {}
+
+	table.insert(menu_items_temp.apps, 1, do
+		const schema = "org.gnome.shell"
+		if not schema_exists(schema)
+			return
+
+		const cat = $CATEGORY("Favorites", "applications-featured")
+		const favorites = Gio.Settings({ :schema })::get_strv("favorite-apps")
+
+		const temp = [Gio.DesktopAppInfo.new(id) for id in *favorites]
+
+		table.sort(temp, (a, b) -> a::get_name()::lower() < b::get_name()::lower())
+
+		for app_info in *temp
+			cat[2][] = create_menu_entry_for_app(app_info, menu)
+		
+		cat
+	)
+
+	for app_list in *all_apps 
+		if next(app_list[2]) == nil
+			continue
+
+		table.insert(menu_items_temp.apps, app_list)
+
+	menu::add({ "awesome",     menu_items_temp.awesome, beautiful.awesome_icon })
+	menu::add({ "Power",       menu_items_temp.power,   lookup_icon("system-shutdown-symbolic") })
+	menu::add({ "Places",      menu_items_temp.places,  lookup_icon("folder") })
+	menu::add({ "Apps",        menu_items_temp.apps,    lookup_icon("applications-all") })
+
+	menu::add({ "Terminal",    wrap(args.terminal),     lookup_icon("terminal") })
+	menu::add({ "Filemanager", wrap(args.filemanager),  lookup_icon("system-file-manager") })
+	menu::add({ "Webbrowser",  wrap(args.browser),      lookup_icon("browser") })
+
+	menu::update()
+
+	menu

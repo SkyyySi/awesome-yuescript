@@ -31,6 +31,21 @@ naughty.connect_signal("request::display_error", (message, startup) ->
 	}
 )
 
+const autostart = {
+	if os.getenv("IS_XEPHYR") == "true"
+		{ "printf", "%s\\n", "Skipped running picom since you're using Xephyr" }
+	else
+		{ "picom", "--config", (gears.filesystem.get_configuration_dir() .. "config/picom/picom.conf") }
+}
+
+for app in *autostart
+	(stdout, stderr, reason, exit_code) <- awful.spawn.easy_async { "pgrep", "-f", "-U", os.getenv("USER"), app[1] }
+
+	if exit_code == 0
+		return
+
+	awful.spawn(app)
+
 -- TODO: Offload this into a separate config.json file, which supports hot reload
 const config = {
 	terminal:    "konsole"
@@ -55,29 +70,7 @@ const edit_config = () ->
 
 menubar.utils.terminal = config.terminal
 
-local main_menu
-
-const awesome_menu = do
-	const wrap = (fn) ->
-		() ->
-			fn()
-			main_menu::hide()
-
-	{
-		{ "Hotkeys",     wrap(() -> hotkeys_popup.show_help(nil, awful.screen.focused())), lookup_icon("input-keyboard-symbolic") }
-		{ "Manual",      wrap(() -> Gio.DesktopAppInfo.launch_default_for_uri("https://awesomewm.org/apidoc")), lookup_icon("help-info-symbolic") }
-		{ "Edit config", edit_config, lookup_icon("edit-symbolic") }
-		{ "Restart",     wrap(awesome.restart), lookup_icon("system-restart-symbolic") }
-		{ "Quit",        wrap(awesome.quit), lookup_icon("exit") }
-	}
-
-main_menu = awful.menu {
-	items: {
-		{ "awesome",  awesome_menu, beautiful.awesome_icon }
-		{ "Terminal", config.terminal, lookup_icon("terminal") }
-		{ "Browser",  (() -> Gio.DesktopAppInfo.launch_default_for_uri("https://")), lookup_icon("browser") }
-	}
-}
+const main_menu = modules.core.menu(config)
 
 const launcher_button = awful.widget.launcher {
 	image: beautiful.awesome_icon
@@ -289,11 +282,13 @@ client.connect_signal("request::titlebars", (c) ->
 
 	top.widget = {
 		{
-			awful.titlebar.widget.iconwidget(c)
+			{
+				widget:  awful.titlebar.widget.iconwidget(c)
+				buttons: buttons
+			}
 			awful.titlebar.widget.floatingbutton(c)
 			awful.titlebar.widget.stickybutton(c)
 			awful.titlebar.widget.ontopbutton(c)
-			buttons: buttons
 			layout:  wibox.layout.fixed.horizontal
 		}
 		{
