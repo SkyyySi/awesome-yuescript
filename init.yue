@@ -25,9 +25,10 @@ import lookup_icon, scale from modules.lib.theme
 
 naughty.connect_signal("request::display_error", (message, startup) ->
 	naughty.notification {
+		timeout: 0
 		urgency: "critical"
-		title:   "Oops, an error happened during " .. (if startup then "startup!" else "runtime!")
-		message: message
+		title:   "<b>Oops, an error happened during " .. (if startup then "startup!" else "runtime!</b>")
+		message: yue.traceback(message, 1)
 	}
 )
 
