@@ -1,3 +1,19 @@
+--- The two important functions in this module are `encode()` and `decode()`,
+--- which turn a table into a JSON string or vice-versa, respectively.
+---
+--- ---
+---
+--- For `encode()`, you may pass an optional table of arguments for formatting:
+---
+--- - `indent: string = "\t"`
+--- - `compact: boolean = false` (Note: Not yet implemented)
+---
+--- As for `decode()`, optional table arguments are:
+---
+--- - `strict: boolean = false` When `true`, the parser will check for strict adherence
+---   to standard JSON - this means that EcmaScript identifier names (that is, names
+---   which match the regex pattern `[a-zA-Z_$][a-zA-Z0-9_$]*`)
+
 const lpeglabel, relabel = select(2, try
 	require("lpeglabel"), require("relabel") 
 catch err
@@ -18,26 +34,6 @@ import P, R, S, V, T, C, Cf, Cg, Ct from lpeglabel
 import calcline from relabel
 
 import tonumber, tostring, rawset, assert, error from _G
-
-const real = do
-	const digit    = R"09"
-	const sign     = S"+-" ^ -1
-	const mantissa = ((digit ^ 1) * P"." * (digit ^ 0)) + (P"." * (digit ^ 1) + (digit ^ 1))
-	const exponent = (S"eE" * sign * (digit ^ 1)) ^ -1
-
-	sign * mantissa * exponent / tonumber
-
-const iden = do
-	const base = R("az", "AZ") + S"_$"
-	base * ((base + R"09") ^ 0)
-
-const ws = S" \t\n\r" ^ 0
-
-const lit = (str) ->
-    ws * P(str) * ws
-
-const attr = (str, attr) ->
-    P(str) / (() -> attr)
 
 --- Lua discards any nil values in tables, so this "fake" null table
 --- forces them to get explicitly put into the decoded table. Note that,
@@ -94,69 +90,112 @@ export unescape_string = (s) ->
 
 	s
 
+const common = {
+	double_quoted_string: (P'"' * C((P'\\"' + 1 - P'"') ^ 0) * (P'"' + T"ClosingDoubleQuoteExpected"))
+	number: do
+		const digit    = R"09"
+		const sign     = S"+-" ^ -1
+		const mantissa = ((digit ^ 1) * P"." * (digit ^ 0)) + (P"." * (digit ^ 1) + (digit ^ 1))
+		const exponent = (S"eE" * sign * (digit ^ 1)) ^ -1
+
+		sign * mantissa * exponent / tonumber
+	identifier: do
+		const base = R("az", "AZ") + S"_$"
+		base * ((base + R"09") ^ 0)
+	whitespace: S" \t\n\r" ^ 0
+	non_string_value: V"Null" + V"Boolean" + V"Number" + V"Array" + V"Object"
+}
+
+const spaced = (pattern) ->
+    common.whitespace * P(pattern) * common.whitespace
+
+const litteral = (str, attr) ->
+    P(str) / (() -> attr)
+
+common.null_litteral = litteral("null", null)
+common.boolean_litteral = litteral("true", true) + litteral("false", false)
+common.array  = (pattern) -> spaced"[" * Ct(       pattern        ) * (spaced"]" + T"ClosingSquareBracketExpected")
+common.object = (pattern) -> spaced"{" * Cf(Ct"" * pattern, rawset) * (spaced"}" + T"ClosingCurlyBracketExpected")
+
 export error_map = {
 	Syntax: "Syntax error"
+	KeyExpected: "Expected a key (a string or a JS identifier name)"
 	ValueExpected: "Expected a value"
 	PairExpected: "Expected a key-value pair"
 	ClosingSquareBracketExpected: "Expected a ']' (closing square bracket)"
 	ClosingCurlyBracketExpected: "Expected a '}' (closing curly bracket)"
 	ClosingDoubleQuoteExpected: "Expected a closing '\"' (double quote)"
-	ClosingSingleQuoteExpected: "Expected a closing \"'\" (double quote)"
+	ClosingSingleQuoteExpected: "Expected a closing \"'\" (single quote)"
+	StrictKeyExpected: "Expected a key (a string)"
 	StrictTrailingComma: "Trailing commas are not allowed in strict mode"
 	StrictIdentifier: "Unquoted identifiers are not allowed in strict mode"
 	StrictSingleQuote: "Using single quotes for quoting is not allowed in strict mode"
+	<index>: (key) => tostring(key)
 }
 
 export grammar = P {
 	"required_value"
 	required_value: V"value" + T"Syntax"
-	value: ws * (V"Null" + V"Boolean" + V"String" + V"Number" + V"Array" + V"Object") * ws
-	iden: iden
-	pair_base: (Cg((V"String" + V"iden") * lit":" * V"value")) -- + (-V"value" + T"ValueExpected"))) + (V"value" + T"PairExpected")
-	pair: V"pair_base" -- + (V"value" + T"PairExpected")
+	value: spaced(common.non_string_value + V"String")
+	identifier: C(common.identifier)
+	key: V"String" + V"identifier"
+	pair: spaced(Cg((V"key" + (-common.non_string_value + T"KeyExpected") * (-V"key" + T"KeyExpected")) *
+		spaced":" * (V"value" + ((-V"value" - spaced",") + T"ValueExpected"))))
 
-	Null: attr("null", null)
-	Boolean: attr("true", true) + attr("false", false)
+	Null: common.null_litteral
+	Boolean: common.boolean_litteral
 	String: (
-		(P'"' * C((P'\\"' + 1 - P'"')^0) * (P'"' + T"ClosingDoubleQuoteExpected")) +
-		(P"'" * C((P'\\"' + 1 - P'"')^0) * (P"'" + T"ClosingSingleQuoteExpected"))
+		common.double_quoted_string +
+		(P"'" * C((P"\\'" + 1 - P"'") ^ 0) * (P"'" + T"ClosingSingleQuoteExpected"))
 	)
-	Number: real
-	Array:  P"[" * Ct(((V"value" * lit",") ^ 0) * (V"value" ^ -1)) * ws * (P"]" + T"ClosingSquareBracketExpected")
-	Object: P"{" * Ct((V"pair"  ^ -1)) * ws * (P"}" + T"ClosingCurlyBracketExpected")
+	Number: common.number
+	Array:  common.array( (V"value" * spaced","^-1) ^ 0)
+	Object: common.object((V"pair"  * spaced","^-1) ^ 0)
 }
 
 export strict_grammar = P {
 	"required_value"
 	required_value: V"value" + T"Syntax"
-	iden: (iden) + T"StrictIdentifier"
-	value: ws * (V"Null" + V"Boolean" + V"String" + V"Number" + V"Array" + V"Object") * ws
-	pair_base: Cg((V"String" + (-lit"," + T"StrictTrailingComma") + V"iden") * lit":" * (V"value" + T"ValueExpected"))
-	pair: (((V"pair_base" * lit",") ^ 0) * (V"pair_base" + T"StrictTrailingComma"))
+	value: spaced(common.non_string_value + V"String")
+	pair: spaced(Cg((V"String" + (-common.non_string_value + T"StrictKeyExpected") * (-common.identifier + T"StrictIdentifier") *
+		(-V"String" + T"StrictKeyExpected")) * spaced":" * (V"value" + ((-V"value" - spaced",") + T"ValueExpected"))))
 
-	Null: attr("null", null)
-	Boolean: attr("true", true) + attr("false", false)
-	String: ((P'"' * C((P'\\"' + 1 - P'"') ^ 0) * (P'"' + T"ClosingDoubleQuoteExpected"))) -- + (P"'" + T"StrictSingleQuote"))
-	Number: real
-	Array:  P"[" * ws * (Ct((V"value" * ((lit"," * V"value") ^ 0)) ^ -1)) * (-lit"," + T"StrictTrailingComma") * (ws * P"]" + T"ClosingSquareBracketExpected")
-	Object: P"{" * ws * Cf(Ct"" * ((V"pair" * ((lit"," * V"pair") ^ 0) ^ -1)), rawset) * (-lit"," + T"StrictTrailingComma") * (ws * P"}" + T"ClosingCurlyBracketExpected")
+	Null: common.null_litteral
+	Boolean: common.boolean_litteral
+	String: (#P"'" * T"StrictSingleQuote") + common.double_quoted_string
+	Number: common.number
+	Array:  common.array( ((V"value" * ((spaced","^-1) * V"value") ^ 0) ^ -1) * (-spaced"," + T"StrictTrailingComma"))
+	Object: common.object(((V"pair"  * ((spaced","^-1) * V"pair" ) ^ 0) ^ -1) * (-spaced"," + T"StrictTrailingComma"))
 }
 
 export is_array = (object) ->
-	for k, _ in pairs(object)
-		if type(k) != "number"
-			return false
+	local true_length = 0
+
+	local array, map = true, false
+
+	for k in pairs(object)
+		t = type(k)
+		if t == "string"
+			map = true
+			break
+		elseif t != "number"
+			error("Only array-like tables and string-indexed tables can get serialized to JSON!")
+		true_length += 1
+
+	if map
+		return false
+
+	if not array
+		assert(map, "Only array-like tables and string-indexed tables can get serialized to JSON!")
+
+		return false
+
+	if true_length > #object
+		error("Only array-like tables and string-indexed tables can get serialized to JSON!")
 
 	true
 
-export encode = (...) ->
-	assert(select("#", ...) > 0, "Expected an object to encode, got nothing")
-
-	--- The `((...) -> ...)(...)` part is a hack to bypass a compiler bug where
-	--- it will think that `...` is just one value, thus raising an error.
-	object, kwargs, __recursion_state = ((...) -> ...)(...)
-	kwargs ??= {}
-
+export encode = (object, kwargs={}, __recursion_state) ->
 	if object == null
 		return "null"
 
@@ -189,27 +228,32 @@ export encode = (...) ->
 		const indent = kwargs.indent::rep(__recursion_state.depth)
 
 		if object_is_array
-			"#{indent}[\n", "\n#{indent}]"
+			"[\n", "\n#{indent}]"
 		else
 			"#{indent}{\n", "\n#{indent}}"
 
 	const indent = kwargs.indent::rep(__recursion_state.depth + 1)
+	const sub_recursion_state = {
+		...__recursion_state
+		depth: __recursion_state.depth + 1
+	}
 
 	local is_first = true
 	if object_is_array
 		for i in *object
 			result ..= if is_first
 				is_first = false
-				"#{indent}#{encode(i)}"
+				"#{indent}#{encode(i, kwargs, sub_recursion_state)}"
 			else
-				",\n#{indent}#{encode(i)}"
+				",\n#{indent}#{encode(i, kwargs, sub_recursion_state)}"
 	else
 		for k, v in pairs(object)
+			assert(type(k) == "string", "Only array-like tables and string-indexed tables can get serialized to JSON!")
 			result ..= if is_first
 				is_first = false
-				"#{indent}#{encode(k)}: #{encode(v)}"
+				"#{indent}#{encode(k, kwargs, sub_recursion_state)}: #{encode(v, kwargs, sub_recursion_state)}"
 			else
-				",\n#{indent}#{encode(k)}: #{encode(v)}"
+				",\n#{indent}#{encode(k, kwargs, sub_recursion_state)}: #{encode(v, kwargs, sub_recursion_state)}"
 
 	prefix .. result .. suffix
 
@@ -231,6 +275,10 @@ export decode = (json, kwargs={}) ->
 		.keep_null_values ??= false
 		.strict ??= false
 
+	assert(type(json) == "string")
+
+	json = json::gsub("%s*$", "")
+
 	const object, err, position = if kwargs.strict
 		strict_grammar::match(json)
 	else
@@ -238,14 +286,20 @@ export decode = (json, kwargs={}) ->
 
 	if object == nil
 		const line, column = calcline(json, position)
-		--const message = "Error at line #{line}, column #{column}: "
-		
-		--error("#{message}#{error_map[err]} (close to '#{json::sub(position - 5)::sub(1, 10)}')")
-		const info_line_start = " #{' '::rep(#(tostring(line)))} |"
-		error("Something when wrong while trying to decode JSON: #{error_map[err]}
-#{info_line_start}
+
+		const len = #(tostring(line))
+		const info_line_start = " #{' '::rep(len)} |"
+		error("Something when wrong while trying to decode JSON:
+
+#{info_line_start}" ..
+--(if line > 3 then "\n#{info_line_start} [...]" else "") ..
+(if line > 2 then "\n #{"%#{len}d"::format(line-2)} | #{json::gsub('[^\n]*\n', '', line - 3)::match('^[^\n]*')}" else "") ..
+(if line > 1 then "\n #{"%#{len}d"::format(line-1)} | #{json::gsub('[^\n]*\n', '', line - 2)::match('^[^\n]*')}" else "") .. "
  #{line} | #{json::gsub('[^\n]*\n', '', line - 1)::match('^[^\n]*')}
-#{info_line_start} #{' '::rep(column - 2)}^")
+#{info_line_start} #{' '::rep(column)}^
+#{info_line_start} #{' '::rep(column)}#{error_map[err]}!
+#{info_line_start}
+")
 	else
 		if not kwargs.keep_null_values
 			discard_null_values(object)

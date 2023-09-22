@@ -7,17 +7,7 @@ export lookup_icon = (icon_name) ->
 	if not icon_name
 		return
 
-	const icon_theme = Gtk.IconTheme.get_default()
-
-	if not icon_theme
-		return
-
-	const icon = icon_theme::lookup_icon(icon_name, 48, 0)
-
-	if not icon
-		return
-
-	icon::get_filename()
+	Gtk.IconTheme.get_default()?::lookup_icon(icon_name, 48, 0)?::get_filename()
 
 export lookup_gicon = (gicon) ->
 	if not gicon
@@ -26,17 +16,7 @@ export lookup_gicon = (gicon) ->
 	if type(gicon) == "string"
 		return gicon
 
-	const icon_theme = Gtk.IconTheme.get_default()
-
-	if not icon_theme
-		return
-
-	const icon = icon_theme::lookup_by_gicon(gicon, 48, 0)
-
-	if not icon
-		return
-
-	icon::get_filename()
+	Gtk.IconTheme.get_default()?::lookup_by_gicon(gicon, 48, 0)?::get_filename()
 
 const dpi = require("beautiful.xresources").apply_dpi(1)
 export scale = (value, s=screen.primary) ->
