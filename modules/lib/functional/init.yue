@@ -1,0 +1,17 @@
+export map = (items, action) ->
+	{ k, action(v, k) for k, v in pairs(items) }
+
+export filer = (items, action) ->
+	{ k, v for k, v in pairs(items) when action(v, k) }
+
+export foreach = (items, action) ->
+	for k, v in pairs(items)
+		action(v, k)
+
+	items
+
+export class Maybe
+	new: (@value) =>
+
+	bind: (fn) =>
+		@@(fn(@value))

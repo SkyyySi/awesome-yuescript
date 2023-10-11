@@ -12,7 +12,7 @@
 ---
 --- - `strict: boolean = false` When `true`, the parser will check for strict adherence
 ---   to standard JSON - this means that EcmaScript identifier names (that is, names
----   which match the regex pattern `[a-zA-Z_$][a-zA-Z0-9_$]*`)
+---   which match the regex pattern `^[a-zA-Z_$][a-zA-Z0-9_$]*$`)
 
 const lpeglabel, relabel = select(2, try
 	require("lpeglabel"), require("relabel") 
@@ -25,7 +25,7 @@ catch err
 --- Note: This json implementation is somewhat off-spec. It supports the following off-spec features:
 --- - trailing commas
 --- - single quoted strings
---- - JS identifier names (regex pattern /[a-zA-Z_$][a-zA-Z0-9_$]*/) as object keys
+--- - JS identifier names (regex pattern /^[a-zA-Z_$][a-zA-Z0-9_$]*$/) as object keys
 ---
 --- If more closely adhereing to the standard JSON specification is important, you may use
 --- the `strict` option for `json.decode()`.
@@ -44,7 +44,8 @@ export null = {
 }
 
 export escape_string = (s) ->
-	s = (s::gsub("\\", "\\\\")
+	s = s
+		::gsub("\\", "\\\\")
 		::gsub("\a", "\\a")
 		::gsub("\b", "\\b")
 		::gsub("\f", "\\f")
@@ -54,7 +55,6 @@ export escape_string = (s) ->
 		::gsub("\v", "\\v")
 		::gsub("\"", "\\\"")
 		::gsub("\127", "\\127") -- DEL / delete key
-	)
 
 	--- See: https://www.asciitable.com/
 	for i = 1, 26
@@ -195,26 +195,40 @@ export is_array = (object) ->
 
 	true
 
-export encode = (object, kwargs={}, __recursion_state) ->
+export is_identifier = (s) ->
+	s::match("^[a-zA-Z_$][a-zA-Z0-9_$]*$")?
+
+export encode = (object, kwargs={}, __recursion_state, __is_key=false) ->
 	if object == null
 		return "null"
+
+	with kwargs
+		.minify ??= false
+		.prefer_unquoted_keys ??= false
+		.indent ??= "\t"
 
 	const typeof_object = type(object)
 	switch typeof_object
 		when "number", "boolean"
 			return tostring(object)
 		when "string"
+			if (
+					kwargs.prefer_unquoted_keys and
+					__recursion_state? and
+					__is_key and
+					is_identifier(object)
+				)
+				return object
+
+
 			return '"' .. escape_string(object) .. '"'
 		when "nil"
 			return "null"
 		when "table"
-			--
+			if next(object) == nil
+				return "{}"
 		else
 			error("Cannot serialize object of type '#{typeof_object}' into json!")
-
-	with kwargs
-		.minify ??= false
-		.indent ??= "\t"
 
 	__recursion_state ??= {
 		depth: 0
@@ -224,13 +238,16 @@ export encode = (object, kwargs={}, __recursion_state) ->
 
 	const object_is_array = is_array(object)
 
-	const prefix, suffix = do
+	local prefix, suffix = do
 		const indent = kwargs.indent::rep(__recursion_state.depth)
 
 		if object_is_array
 			"[\n", "\n#{indent}]"
 		else
-			"#{indent}{\n", "\n#{indent}}"
+			"{\n", "\n#{indent}}"
+
+	if __recursion_state.depth <= 0
+		suffix ..= "\n"
 
 	const indent = kwargs.indent::rep(__recursion_state.depth + 1)
 	const sub_recursion_state = {
@@ -251,9 +268,9 @@ export encode = (object, kwargs={}, __recursion_state) ->
 			assert(type(k) == "string", "Only array-like tables and string-indexed tables can get serialized to JSON!")
 			result ..= if is_first
 				is_first = false
-				"#{indent}#{encode(k, kwargs, sub_recursion_state)}: #{encode(v, kwargs, sub_recursion_state)}"
+				"#{indent}#{encode(k, kwargs, sub_recursion_state, true)}: #{encode(v, kwargs, sub_recursion_state)}"
 			else
-				",\n#{indent}#{encode(k, kwargs, sub_recursion_state)}: #{encode(v, kwargs, sub_recursion_state)}"
+				",\n#{indent}#{encode(k, kwargs, sub_recursion_state, true)}: #{encode(v, kwargs, sub_recursion_state)}"
 
 	prefix .. result .. suffix
 
@@ -289,7 +306,7 @@ export decode = (json, kwargs={}) ->
 
 		const len = #(tostring(line))
 		const info_line_start = " #{' '::rep(len)} |"
-		error("Something when wrong while trying to decode JSON:
+		error("Something when wrong" .. (if kwargs.file? then "\nwhile trying to decode file '#{kwargs.file}'" else " while trying to decode JSON") .. ":
 
 #{info_line_start}" ..
 --(if line > 3 then "\n#{info_line_start} [...]" else "") ..
@@ -305,3 +322,12 @@ export decode = (json, kwargs={}) ->
 			discard_null_values(object)
 
 	object
+
+export decode_file_blocking = (path, kwargs) ->
+	const handle = assert(io.open(path), "Could not open path '#{path}'!")
+
+	const content = handle::read("*a")
+
+	handle::close()
+
+	decode(content, { ...kwargs, file: path })

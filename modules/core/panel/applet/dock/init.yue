@@ -1,0 +1,191 @@
+import "awful"
+import "gears"
+import "wibox"
+import "beautiful"
+
+import Gio from "lgi"
+
+import scale, lookup_icon, lookup_gicon from "modules.lib.theme"
+
+import "modules.core.panel.common"
+
+export schema_exists = (schema) ->
+	schema in Gio.Settings.list_schemas()
+
+-- TODO: Gio.DesktopAppInfo doesn't allow to read action icons (because GNOME). They must
+--       be manually parsed from a GLib.KeyFile
+
+export class AppAction
+	new: (data) =>
+		for k, v in pairs(data)
+			@[k] = v
+
+	from_g_app_info: (cls, action_name, g_app_info) ->
+		local self
+		self = cls {
+			id:     action_name
+			name:   g_app_info::get_action_name(action_name)
+			launch: () -> g_app_info::launch_action(@id)
+			--icon: ...
+			:g_app_info
+		}
+		self
+
+export parse_actions = (g_app_info) ->
+	[ AppAction::from_g_app_info(action, g_app_info) for action in *g_app_info::list_actions() ]
+
+export class AppInfo
+	new: (data) =>
+		for k, v in pairs(data)
+			@[k] = v
+
+	from_g_app_info: (cls, g_app_info) ->
+		cls {
+			name:    g_app_info::get_name()
+			launch:  () -> g_app_info::launch()
+			icon:    lookup_gicon(g_app_info::get_icon())
+			actions: parse_actions(g_app_info)
+			id:      g_app_info::get_filename()::match("^.*/(.+%.desktop)$")
+			:g_app_info
+		}
+
+export pin_app = (desktop_id) ->
+	const schema = "org.gnome.shell"
+	assert(schema_exists(schema))
+	const shell = Gio.Settings({ :schema })
+
+	const favorites = shell::get_strv("favorite-apps")
+	favorites[]     = desktop_id
+	shell::set_strv("favorite-apps", favorites)
+
+export unpin_app = (desktop_id) ->
+	const schema = "org.gnome.shell"
+	assert(schema_exists(schema))
+	const shell = Gio.Settings({ :schema })
+
+	const favorites = shell::get_strv("favorite-apps")
+	print(desktop_id)
+	print("---------------")
+	for id in *favorites
+		print(id)
+	shell::set_strv("favorite-apps", [ id for id in *favorites when id != desktop_id ])
+
+export get_context_menu_for_app_info = (app_info, is_pinned=true) ->
+	const items = [ { action.name, action.launch, action.icon } for action in *app_info.actions ]
+
+	items[] = { "⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯" }
+	items[] = if is_pinned
+		{ "Unpin", (() -> unpin_app(app_info.id)), lookup_icon("window-unpin") }
+	else
+		{   "Pin", (() ->   pin_app(app_info.id)), lookup_icon("window-unpin") }
+
+	awful.menu {
+		:items
+	}
+
+export.<call> = (_, kwargs={}) ->
+	with kwargs
+		assert(.helpers)
+		.orientation ??= "horizontal"
+		.layout ??= wibox.layout.fixed[kwargs.orientation]
+
+	const base_widget = wibox.widget {
+		spacing: common.item_spacing
+		layout:  kwargs.layout
+	}
+
+	const create_entry = (app_info) ->
+		const imagebox = wibox.widget {
+			image:  app_info.icon
+			widget: wibox.widget.imagebox
+		}
+
+		const padded_imagebox = wibox.widget {
+			imagebox
+			margins: common.item_spacing
+			widget:  wibox.container.margin
+		}
+
+		const entry = wibox.widget {
+			padded_imagebox
+			bg:           beautiful.button_bg_normal
+			shape:        common.inner_rounded_shape
+			border_width: scale(1)
+			border_color: beautiful.border_color_normal
+			widget:       wibox.container.background -- TODO: Replace with a button wrapper
+		}
+
+		const context_menu = get_context_menu_for_app_info(app_info)
+
+		with cs = entry::connect_signal
+			local old_cursor, old_wibox
+
+			cs("mouse::enter", () =>
+				padded_imagebox.margins = common.item_spacing - scale(1)
+				@bg = beautiful.button_bg_hover
+
+				const wb = mouse.current_wibox
+				
+				if not wb
+					return
+
+				old_cursor, old_wibox = wb.cursor, wb
+				wb.cursor = "hand1" 
+			)
+
+			cs("mouse::leave", () =>
+				padded_imagebox.margins = common.item_spacing
+				@bg = beautiful.button_bg_normal
+
+				if not old_wibox
+					return
+
+				old_wibox.cursor = old_cursor
+				old_wibox = nil
+			)
+
+			cs("button::press",   (x, y, b) =>
+				switch b
+					when 1
+						@bg = beautiful.button_bg_press
+						padded_imagebox.margins = common.item_spacing + scale(1)
+			)
+
+			cs("button::release", (x, y, b) =>
+				switch b
+					when 1
+						@bg = beautiful.button_bg_hover
+						padded_imagebox.margins = common.item_spacing - scale(1)
+						app_info.launch()
+					when 3
+						context_menu::toggle()
+			)
+
+		entry
+
+	const create_entry_from_g_app_info = (g_app_info) ->
+		create_entry(AppInfo::from_g_app_info(g_app_info))
+
+	const schema = "org.gnome.shell"
+
+	assert(schema_exists(schema))
+
+	const shell = Gio.Settings({ :schema })
+
+	base_widget.load_favorites = () =>
+		const favorites = shell::get_strv("favorite-apps")
+
+		for id in *favorites
+			const g_app_info = Gio.DesktopAppInfo.new(id)
+
+			if g_app_info?
+				@add(create_entry_from_g_app_info(g_app_info))
+
+	shell.on_changed = (key) =>
+		if key == "favorite-apps"
+			base_widget::reset()
+			base_widget::load_favorites()
+
+	base_widget::load_favorites()
+
+	base_widget

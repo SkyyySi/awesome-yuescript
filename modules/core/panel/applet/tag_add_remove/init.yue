@@ -1,0 +1,85 @@
+import "awful"
+import "gears"
+import "wibox"
+import "beautiful"
+
+import scale, lookup_icon from "modules.lib.theme"
+
+import "modules.core.panel.common"
+
+export.<call> = (_, kwargs={}) ->
+	with kwargs
+		assert(.config)
+		assert(.helpers)
+		assert(.screen)
+
+	{ :config, :helpers, :screen } = kwargs
+
+	const inner_shape = (tl, tr, br, bl) ->
+		(cr, w, h) ->
+			gears.shape.partially_rounded_rect(cr, w, h, tl, tr, br, bl, common._outer_spacing_base - (common.item_spacing / 2))
+
+	const button_template = (label, shape, callback) ->
+		const widget = wibox.widget {
+			{
+				{
+					font:   "Source Code Pro, Bold 12"
+					text:   label
+					halign: "center"
+					valign: "center"
+					widget: wibox.widget.textbox
+				}
+				widget: helpers.with_widget(wibox.container.margin, (w) ->
+					w.margins = helpers.if_horizontal({
+						left:  scale(12)
+						right: scale(12)
+					}, {
+						top:    scale(12)
+						bottom: scale(12)
+					})
+				)
+			}
+			bg:           beautiful.button_bg_normal
+			border_width: beautiful.border_width
+			border_color: beautiful.border_color_normal
+			shape:        shape
+			widget:       wibox.container.background
+		}
+
+		widget::connect_signal("button::release", (x, y, b) =>
+			switch b
+				when 1
+					callback()
+		)
+
+		widget
+
+	--- Reminder: The order is top_left, top_right, bottom_right, bottom_left
+	const get_add_shape_corners = () ->
+		helpers.if_horizontal({ true, false, false, true }, { true, true, false, false })
+
+	const get_remove_shape_corners = () ->
+		[not i for i in *get_add_shape_corners()]
+
+	const add_base = button_template("+", inner_shape(unpack(get_add_shape_corners())), () ->
+		const index = #screen.tags + 1
+		awful.tag.add(tostring(index), {
+			layout: awful.layout.layouts[1]
+			:screen
+		})
+	)
+	const remove_base = button_template("-", inner_shape(unpack(get_remove_shape_corners())), () ->
+		const index = #screen.tags
+		screen.tags[index]::delete()
+	)
+
+	wibox.widget {
+		{
+			add_base
+			remove_base
+			spacing: common.item_spacing / 2
+			layout:  helpers.auto_layout(wibox.layout.fixed)
+		}
+		margins: common.item_spacing
+		widget:  wibox.container.margin
+	}

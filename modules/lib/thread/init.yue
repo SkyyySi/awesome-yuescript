@@ -1,0 +1,39 @@
+import getinfo, getupvalue, setupvalue from debug
+
+export capture_upvalues = (func) ->
+	const upvalue_count = getinfo(func).nups
+
+	if upvalue_count < 1
+		return {}
+
+	const upvalues = for i = 1, upvalue_count
+		const name, value = getupvalue(func, i)
+
+		const entry = { index: i, :name, :value }
+
+		if type(value) == "function"
+			entry.value = string.dump(value)
+			entry.upvalues = capture_upvalues(value)
+
+		entry
+
+	{
+		:upvalues
+		count: upvalue_count
+		value: string.dump(func)
+	}
+
+export apply_upvalues = (data) ->
+	const func = load(data.value)
+
+	for i = 1, data.count
+		const entry = data.upvalues[i]
+
+		const value = if upvalues = entry.upvalues
+			apply_upvalues(load(entry.value), upvalues)
+		else
+			entry.value
+
+		setupvalue(func, i, value)
+
+	func

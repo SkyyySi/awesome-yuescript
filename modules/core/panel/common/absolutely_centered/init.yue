@@ -1,0 +1,104 @@
+import "awful"
+import "gears"
+import "wibox"
+import "beautiful"
+
+const basic_container = require("modules.core.panel.common.basic_container")
+
+export.<call> = (_) ->
+	const base = wibox.widget {
+		{
+			{
+				id:     "start_role"
+				widget: basic_container
+			}
+			{
+				id:     "button_role"
+				layout: wibox.layout.fixed.horizontal
+			}
+			nil
+			id:     "inside_align_role"
+			expand: "inside"
+			layout: wibox.layout.align.horizontal
+		}
+		{
+			nil
+			{
+				id:     "center_role"
+				widget: basic_container
+			}
+			nil
+			id:     "inside_align_role"
+			expand: "inside"
+			layout: wibox.layout.align.horizontal
+		}
+		{
+			nil
+			{
+				id:     "button_role"
+				layout: wibox.layout.fixed.horizontal
+			}
+			{
+				id:     "end_role"
+				widget: basic_container
+			}
+			id:     "inside_align_role"
+			expand: "inside"
+			layout: wibox.layout.align.horizontal
+		}
+		id:     "outside_align_role"
+		expand: "outside"
+		layout: wibox.layout.align.horizontal
+	}
+
+	base.get_children = () =>
+		const first  = @get_children_by_id("start_role")[1].widget
+		const second = @get_children_by_id("center_role")[1].widget
+		const third  = @get_children_by_id("end_role")[1].widget
+
+		{ first, second, third }
+
+	base.set_children = (children) =>
+		{ first, second, third } = children
+
+		@get_children_by_id("start_role")[1].widget  = first
+		@get_children_by_id("center_role")[1].widget = second
+		@get_children_by_id("end_role")[1].widget    = third
+
+		@emit_signal("property::children", @, children)
+		@emit_signal("widget::layout_changed", @)
+
+	base.get_buttons = () =>
+		@_private.buttons
+
+	base.set_buttons = (buttons) =>
+		@_private.buttons = buttons
+
+		for child in *@get_children_by_id("button_role")
+			child.buttons = buttons
+
+		@emit_signal("property::buttons", @, buttons)
+
+	base.get_orientation = () =>
+		@_private.orientation
+
+	base.set_orientation = (orientation) =>
+		const direction = if orientation == "horizontal"
+			"x"
+		else
+			"y"
+
+		@_private.orientation = orientation
+
+		const for_children_common = (child) ->
+			child._private.dir = direction
+			child::emit_signal("widget::layout_changed")
+
+		for child in *@get_children_by_id("button_role") do for_children_common(child)
+		for child in *@get_children_by_id("inside_align_role") do for_children_common(child)
+		for child in *@get_children_by_id("outside_align_role") do for_children_common(child)
+
+		@emit_signal("property::orientation", @, orientation)
+		@emit_signal("widget::layout_changed", @)
+
+	base

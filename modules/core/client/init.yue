@@ -1,0 +1,85 @@
+import "awful"
+import "gears"
+import "wibox"
+import "beautiful"
+
+import scale from "modules.lib.theme"
+
+export picom_set = (window, property, value) ->
+	window = tostring(window)
+
+	switch type(value)
+		when "boolean"
+			value = if value
+				"1"
+			else
+				"0"
+		when "number"
+			tostring(value)
+
+	awful.spawn { "xprop", "-id", window, "-f", property, "32c", "-set", property, value }
+
+export update_client_shape = do
+	const forced_rect_shape = false
+
+	const client_border_width = beautiful.border_width or scale(1)
+
+	const client_shape = beautiful.client_shape or (cr, w, h) ->
+		gears.shape.rounded_rect(cr, w, h, (beautiful.corner_radius or scale(10)))
+
+	const rectangle = gears.shape.rectangle
+
+	const set_picom_property = (window, enabled) ->
+		picom_set(window, "_PICOM_ROUNDED_CORNERS", enabled)
+		picom_set(window, "_PICOM_SHADOWS",         enabled)
+
+	(c) ->
+		window = c.window
+
+		if forced_rect_shape
+			c._old_border_width = c._old_border_width or client_border_width
+			c.border_width = client_border_width
+			c.shape = rectangle
+			set_picom_property(window, false)
+			return
+
+		if c.maximized or c.fullscreen
+			c._old_border_width = c._old_border_width or client_border_width
+			c.border_width = 0
+			c.shape = rectangle
+			set_picom_property(window, false)
+		else
+			c.border_width = c._old_border_width or client_border_width
+			if c.type == "normal"
+				c.shape = client_shape
+			set_picom_property(window, true)
+
+export.<call> = (_, kwargs={}) ->
+	with kwargs
+		assert(.config)
+
+	awesome.connect_signal("beautiful::gaps_status_changed", () ->
+		forced_rect_shape = not beautiful.gaps_enabled
+
+		for c in *client.get()
+			update_client_shape(c)
+	)
+
+	for c in *client.get()
+		update_client_shape(c)
+
+	client.connect_signal("manage", update_client_shape)
+	client.connect_signal("property::fullscreen", update_client_shape)
+	client.connect_signal("property::maximized", update_client_shape)
+
+	const tag_has_maxmimized_client = (t) ->
+		local result = false
+
+		for _, c in t::clients()
+			if c.maximized or c.fullscreen
+				result = true
+				break
+
+		awesome.emit_signal("tag::has_maximized_client", result)
+
+		result

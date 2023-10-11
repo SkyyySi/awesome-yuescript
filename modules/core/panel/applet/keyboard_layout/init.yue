@@ -1,0 +1,42 @@
+import "awful"
+import "gears"
+import "wibox"
+import "beautiful"
+
+import scale, lookup_icon from "modules.lib.theme"
+
+import "modules.core.panel.common"
+
+import schema_exists from "modules.core.panel.applet.dock"
+
+import Gio, GLib from "lgi"
+
+export schema = "org.gnome.desktop.input-sources"
+
+export get_g_setting = () ->
+	Gio.Settings({ :schema })
+
+export get_input_sources = (setting=get_g_setting!) ->
+	setting::get_value("sources")
+
+export.<call> = (_, kwargs={}) ->
+	with kwargs
+		assert(.screen)
+		assert(.config)
+		assert(.helpers)
+
+	{ :screen, :config, :helpers } = kwargs
+
+	const widget = awful.widget.keyboardlayout()
+
+	assert(schema_exists(schema))
+
+	const setting = get_g_setting()
+	const input_sources = get_input_sources(setting)
+
+	--notify("Connecting")
+	-- TODO: Doesn't work for some reason...
+	setting.on_changed.connect (key) =>
+		notify("key = #{key}")
+
+	widget

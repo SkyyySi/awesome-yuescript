@@ -1,0 +1,153 @@
+import with_line_callback from "awful.spawn"
+import get_configuration_dir from "gears.filesystem"
+import delayed_call from "gears.timer"
+
+const config_dir = get_configuration_dir()
+
+import "modules.lib.json"
+
+import "lgi"
+import GLib, Gio from lgi
+
+export substitutions = {
+	CONFIG_DIR:  config_dir
+}
+
+local apply_substitution_inner
+apply_substitution_inner = (object) ->
+	switch type(object)
+		when "string"
+			object
+				::gsub("%%%{ENV:([a-zA-Z-_]+)%}", os.getenv)
+				::gsub("%%%{AWESOME:([a-zA-Z-_]+)%}", (match) -> substitutions[match])
+		when "table"
+			{k, apply_substitution_inner(v) for k, v in pairs(object)}
+		else
+			object
+
+export apply_config_substitution = (tb) ->
+	apply_substitution_inner({ k, v for k, v in pairs(tb) })
+
+macro GET_PRIVATE = (object, field_name) ->
+	assert(object)
+	assert(field_name and field_name::match("^@?@?[a-zA-Z_][a-zA-Z_0-9]*$"))
+	"rawget(#{object}, '__PRIVATE_#{field_name}__')"
+
+macro SET_PRIVATE = (object, field_name, value) ->
+	assert(object)
+	assert(field_name and field_name::match("^@?@?[a-zA-Z_][a-zA-Z_0-9]*$"))
+	"rawset(#{object}, '__PRIVATE_#{field_name}__', #{value ?? field_name})"
+
+local set_config_field_recurse
+set_config_field_recurse = (config_slice, key, value, @, callback) ->
+	if base, rest = key::match("^([^%.]+)%.(.+)$")
+		return set_config_field_recurse(config_slice[base], rest, value, @, callback)
+	else
+		config_slice[key] = value
+
+	const file_path  = $GET_PRIVATE(@, file_path)
+	const raw_config = $GET_PRIVATE(@, raw_config)
+
+	$SET_PRIVATE(@, is_write_locked, true)
+	const gfile = Gio.File.new_for_path(file_path)
+	(source_object, result) <- gfile::replace_contents_async(json.encode(raw_config, { prefer_unquoted_keys: true }), nil, false, {}, nil)
+	$SET_PRIVATE(@, is_write_locked, false)
+	const success = gfile::replace_contents_finish(result)
+	assert(success, "Could not save config changes to '#{file_path}'!")
+	if callback?
+		callback(@)
+
+export class ConfigProxy
+	new: (file_path) =>
+		$SET_PRIVATE(@, file_path)
+		$SET_PRIVATE(@, raw_config, json.decode_file_blocking(file_path, strict: false))
+		$SET_PRIVATE(@, is_write_locked, false)
+
+		--$SET_PRIVATE(@, raw_config)
+
+	reload: () =>
+		const file_path  = $GET_PRIVATE(@, file_path)
+		const raw_config = json.decode_file_blocking(file_path, strict: false)
+
+		--notify(raw_config, 0)
+		--notify(file_path,  0)
+
+		$SET_PRIVATE(@, raw_config)
+
+		awesome.emit_signal("modules::lib::hot_config::reload", @)
+
+	set: (key, value, callback) =>
+		if $GET_PRIVATE(@, is_write_locked)
+			--notify("config.json is currently write-locked; please wait a moment and then try again")
+			if callback?
+				callback(@)
+			return
+
+		--notify("Config changed:\n    \"#{key}\": \"#{value}\"")
+		set_config_field_recurse($GET_PRIVATE(@, raw_config), key, value, @, callback)
+
+	<index>: (key) =>
+		do
+			const value = @.<>[key]
+			if value?
+				return value
+
+		const file_path  = $GET_PRIVATE(@, file_path)
+		const raw_config = $GET_PRIVATE(@, raw_config)
+
+		apply_config_substitution(raw_config)[key]
+		--config[key]
+
+	--[[
+	<newindex>: (key, value) =>
+		notify("Config changed:\n    \"#{key}\": \"#{value}\"")
+		const file_path  = $GET_PRIVATE(@, file_path)
+		const raw_config = $GET_PRIVATE(@, raw_config)
+
+		--awesome.emit_signal("json_config::changed", @, key, value)
+
+		raw_config[key] = value
+
+		$SET_PRIVATE(@, is_write_locked, true)
+		const gfile = Gio.File.new_for_path(file_path)
+		(source_object, result) <- gfile::replace_contents_async(json.encode(raw_config), "", false)
+		$SET_PRIVATE(@, is_write_locked, false)
+		const success = gfile::replace_contents_finish(source_object, result)
+		assert(success, "Could not save config changes to '#{file_path}'!")
+	--]]
+
+export load = (path) ->
+	path = path::gsub("/+", "/")
+
+	const proxy = ConfigProxy(path)
+
+	const update = () ->
+		if $GET_PRIVATE(proxy, is_write_locked)
+			--notify("config.json is currently write-locked; please wait a moment and then try again")
+			return
+
+		proxy::reload()
+
+	with_line_callback(
+		"inotifywait -m -q -e close_write --format '[updated]' -- '#{path}'"
+		{
+			stdout: (line) ->
+				update()
+		}
+	)
+
+	--- I would use Gio.FileMonitor if it would actually work. It works just fine when run in a
+	--- stand-alone script or REPL, but does absolutely nothing when run within awesome. Don't ask.
+	--[[
+	const gfile   = Gio.File.new_for_path(path)
+	const monitor = gfile::monitor({})
+	monitor.on_changed = (file, other_file, event_type) =>
+		notify("self = #{@}\nfile = #{file}\nother_file = #{other_file}\nevent_type = #{event_type}")
+
+		if event_type == "CHANGES_DONE_HINT"
+			update()
+	--]]
+
+	delayed_call(update)
+
+	proxy

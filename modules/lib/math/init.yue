@@ -1,0 +1,11 @@
+export clamp = (value, floor, ceiling) ->
+	if value > ceiling
+		ceiling
+	elseif value < floor
+		floor
+	else
+		floor
+
+const { floor: math_floor } = math
+export round = (value) ->
+	math_floor(value + 0.5)

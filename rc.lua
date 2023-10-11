@@ -1,15 +1,8 @@
-do
-	--print(os.getenv("DISPLAY"))
-	--local display = tonumber(os.getenv("DISPLAY"):match("%d+$"))
+local successfully_sourced_yue_config, yue_config_error_message = false, ""
+successfully_sourced_yue_config, yue_config_error_message = pcall(require, "init")
 
-	--if (display ~= nil) and (display > 2) then
-		local success
-		success = pcall(require("yue"), "init")
-
-		if success then
-			return
-		end
-	--end
+if successfully_sourced_yue_config then
+	return
 end
 
 -- awesome_mode: api-level=4:screen=on
@@ -51,6 +44,15 @@ end)
 -- Themes define colours, icons, font and wallpapers.
 beautiful.init(gears.filesystem.get_themes_dir() .. "default/theme.lua")
 
+if not successfully_sourced_yue_config then
+	naughty.notification {
+		urgency = "critical",
+		title   = "Oops, an error happened during runtime!",
+		font    = "Source Code Pro 12",
+		message = yue_config_error_message,
+	}
+end
+
 -- This is used later as the default terminal and editor to run.
 terminal = "konsole"
 editor = os.getenv("EDITOR") or "micro"
@@ -80,7 +82,7 @@ local function lookup_icon(icon_name)
 		return
 	end
 
-	icon = icon_theme:lookup_icon(icon_name, 48, 0)
+	local icon = icon_theme:lookup_icon(icon_name, 48, 0)
 
 	if not icon then
 		return
@@ -105,7 +107,7 @@ local function lookup_gicon(gicon)
 		return
 	end
 
-	icon = icon_theme:lookup_by_gicon(gicon, 48, 0)
+	local icon = icon_theme:lookup_by_gicon(gicon, 48, 0)
 
 	if not icon then
 		return
@@ -120,8 +122,8 @@ local function gen_app_menu()
 		{ "Development", {}, lookup_icon("applications-development") },
 		{ "Education",   {}, lookup_icon("applications-education") },
 		{ "Games",       {}, lookup_icon("applications-games") },
-		{ "Internet",    {}, lookup_icon("applications-graphics") },
-		{ "Network",     {}, lookup_icon("applications-internet") },
+		{ "Graphics",    {}, lookup_icon("applications-graphics") },
+		{ "Internet",    {}, lookup_icon("applications-internet") },
 		{ "Office",      {}, lookup_icon("applications-office") },
 		{ "Science",     {}, lookup_icon("applications-science") },
 		{ "Settings",    {}, lookup_icon("preferences-desktop") },

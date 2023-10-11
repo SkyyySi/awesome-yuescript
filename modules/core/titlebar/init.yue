@@ -1,0 +1,79 @@
+import "awful"
+import "gears"
+import "wibox"
+import "beautiful"
+
+import iconwidget, floatingbutton, stickybutton, ontopbutton, titlewidget, minimizebutton, maximizedbutton, closebutton from awful.titlebar.widget
+
+export default (kwargs={}) ->
+	with kwargs
+		assert(.config)
+
+	client.connect_signal("request::titlebars", (c) ->
+
+		if c.requests_no_titlebar
+			return
+
+		const buttons = {
+			awful.button({}, 1, () -> c::activate { context: "titlebar", action: "mouse_move" })
+			awful.button({}, 3, () -> c::activate { context: "titlebar", action: "mouse_resize" })
+		}
+
+		--- When adding a titlebar, the total width/height of a client changes. This
+		--- results in clients growing with each restart of awesome. That's not an
+		--- issue as long as your client is tiled, but when it's maximized or floating,
+		--- it can get pretty annoying. Thus, we store the size before adding any
+		--- titlebars, and set those values on `c` at the bottom of this function.
+		const {width: width_before, height: height_before} = c
+
+		const main = awful.titlebar(c, {
+			position: "top"
+			size:     beautiful.titlebar_size
+		})
+
+		main.widget = {
+			{
+				{
+					{
+						iconwidget(c)
+						margins: 4
+						widget:  wibox.container.margin
+						buttons: buttons
+					}
+					floatingbutton(c)
+					stickybutton(c)
+					ontopbutton(c)
+					layout:  wibox.layout.fixed.horizontal
+				}
+				{
+					{
+						halign: "center"
+						widget: titlewidget(c)
+					}
+					buttons: buttons
+					expand:  "outside"
+					layout:  wibox.layout.align.horizontal
+				}
+				{
+					minimizebutton(c)
+					maximizedbutton(c)
+					closebutton(c)
+					layout: wibox.layout.fixed.horizontal()
+				}
+				layout: wibox.layout.align.horizontal
+			}
+			bg: gears.color {
+				type:  "linear"
+				from:  { 0, 0 }
+				to:    { 0, beautiful.titlebar_size }
+				stops: {
+					{ 0, "#FFFFFF08" }
+					{ 1, "#FFFFFF00" }
+				}
+			}
+			widget: wibox.container.background
+		}
+
+		c.width  = width_before
+		c.height = height_before
+	)

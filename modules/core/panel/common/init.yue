@@ -1,0 +1,115 @@
+import "awful"
+import "gears"
+import "wibox"
+import "beautiful"
+
+import scale, lookup_icon, lookup_gicon from "modules.lib.theme"
+
+export absolutely_centered = require(... .. ".absolutely_centered")
+export basic_container     = require(... .. ".basic_container")
+
+export foreach = (list, fn) ->
+	for i in *list
+		fn(i)
+
+export is_hovered_over = (w) ->
+	if current_widgets = mouse.current_widgets
+		if w in current_widgets
+			return true
+
+	false
+
+export item_spacing = scale(4)
+
+export _outer_spacing_base = scale(10)
+export outer_rounded_shape = (cr, w, h) -> gears.shape.rounded_rect(cr, w, h, _outer_spacing_base)
+export _inner_spacing_base = _outer_spacing_base - (item_spacing / 2)
+export inner_rounded_shape = (cr, w, h) -> gears.shape.rounded_rect(cr, w, h, _inner_spacing_base)
+
+export wrap_widget = (widget) ->
+	{
+		--{
+			widget
+			bg:           beautiful.button_bg_normal
+			border_width: beautiful.border_width
+			border_color: beautiful.border_color_normal
+			shape:        inner_rounded_shape
+			widget:       wibox.container.background
+		--}
+		--margins: item_spacing
+		--widget:  wibox.container.margin
+	}
+
+export wrap_text_widget = (widget, orientation) ->
+	wrap_widget {
+		widget
+		left:   scale(4)
+		right:  scale(4)
+		widget: wibox.container.margin
+	}
+
+export client_is_valid = (c) ->
+	pcall(() -> c.valid) and c.valid
+
+export get_has_maximized_client = (s) ->
+	if (s.clients == nil) or (#s.clients < 1)
+		return
+
+	for c in *s.clients
+		if not client_is_valid(c)
+			return
+
+		if (not (c.hidden or c.minimized)) and (c.maximized or c.fullscreen)
+			return true
+
+	false
+
+export parse_orientation = (position) ->
+	switch position
+		when "top", "bottom"
+			"horizontal"
+		when "left", "right"
+			"vertical"
+		else
+			error("Invalid panel position: '#{position}' (type: #{type(position)}) (expected 'top', 'bottom', 'left' or 'right')")
+
+export absolute_center = (left, center, right, buttons) ->
+	{
+		{
+			{
+				left
+				layout: wibox.layout.fixed.horizontal
+			}
+			{
+				layout: wibox.layout.fixed.horizontal
+				buttons: buttons
+			}
+			expand: "inside"
+			layout: wibox.layout.align.horizontal
+		}
+		{
+			nil
+			{
+				center
+				layout: wibox.layout.fixed.horizontal
+			}
+			layout: wibox.layout.align.horizontal
+		}
+		{
+			nil
+			{
+				layout: wibox.layout.fixed.horizontal
+				buttons: buttons
+			}
+			{
+				right
+				layout: wibox.layout.fixed.horizontal
+			}
+			layout: wibox.layout.align.horizontal
+		}
+		expand: "outside"
+		layout: wibox.layout.align.horizontal
+	}
+
+export wrap_constructor = (fn) ->
+	{ <call>: (_, ...) -> fn(...) }

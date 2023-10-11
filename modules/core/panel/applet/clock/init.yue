@@ -1,0 +1,123 @@
+import "awful"
+import "gears"
+import "wibox"
+import "beautiful"
+
+import scale, lookup_icon from "modules.lib.theme"
+
+import "modules.core.panel.common"
+
+export today = () ->
+	{
+		day:   tonumber(os.date("%d"))
+		month: tonumber(os.date("%m"))
+		year:  tonumber(os.date("%Y"))
+	}
+
+export.<call> = (_, kwargs={}) ->
+	with kwargs
+		assert(.config)
+		assert(.helpers)
+		assert(.screen)
+
+	{ :config, :helpers, :screen } = kwargs
+
+	const base_widget = wibox.widget {
+		nil
+		{
+			font:    "Source Sans Pro, #{math.floor(scale(9) + 0.5)}"
+			halign:  "center"
+			--line_spacing_factor: 0.75 -- This doesn't work when set to a negative value. For... *some* reason.
+			refresh: 1
+			widget:  helpers.with_widget(wibox.widget.textclock, (w) ->
+				w.format = "<span line_height=\"0.75\">" .. helpers.if_horizontal("%d.%m.%Y\n%H:%M:%S", "%H:%M\n%d.%m\n%Y") .. "</span>"
+			)
+		}
+		layout: wibox.layout.align.vertical
+	}
+
+	const shape = (cr, w, h) ->
+		gears.shape.transform(gears.shape.infobubble)
+			::translate(0, 0)
+			::rotate_at(w/2, h/2, math.pi)(cr, w, h, common._outer_spacing_base, common._outer_spacing_base)
+
+	const calendar = wibox.widget {
+		{
+			{
+				widget: wibox.widget.calendar.month(today(), beautiful.font)
+			}
+			widget: helpers.with_widget(wibox.container.margin, (w) ->
+				const base = common.item_spacing * 2
+				w.margins = {
+					top:    base
+					bottom: base
+					left:   base
+					right:  base
+				}
+				const position = helpers.get_position()
+				w[position] = base + common._outer_spacing_base
+			)
+		}
+		bg:           beautiful.bg_normal
+		border_width: beautiful.border_width
+		border_color: beautiful.border_color_normal
+		widget:       wibox.container.background
+		:shape
+	}
+
+	const calendar_popup = awful.popup {
+		screen:  screen
+		margin:  common.item_spacing
+		bg:      gears.color.transparent
+		ontop:   true
+		visible: false
+		widget:  calendar
+		:shape
+	}
+
+	calendar_popup.show = () =>
+		if c = client.focus
+			c.active = false
+		@visible = true
+
+	calendar_popup.hide = () =>
+		@visible = false
+
+	calendar_popup.toggle = () =>
+		if @visible
+			@hide()
+		else
+			@show()
+
+	client.connect_signal("property::active", () =>
+		calendar_popup::hide()
+	)
+
+	const update_calendar_positon = () ->
+		const position = helpers.get_position()
+		awful.placement[position](calendar_popup, {
+			honor_workarea: true
+			--margins:        beautiful.useless_gap
+		})
+
+		const widget_geo = mouse.current_widget_geometry
+
+		if helpers.is_horizontal()	
+			calendar_popup.x = widget_geo.x + (widget_geo.width  / 2) - (calendar_popup.width  / 2)
+		else
+			calendar_popup.y = widget_geo.y + (widget_geo.height / 2) - (calendar_popup.height / 2)
+
+	base_widget::connect_signal("button::release", (x, y, b) =>
+		if b != 1
+			return
+
+		calendar_popup::toggle()
+
+		update_calendar_positon()
+	)
+
+	--- The popup isn't shown in the correct position when showing it for the first time
+	--- after a restart of awesome if this isn't run
+	gears.timer.delayed_call(update_calendar_positon)
+
+	base_widget

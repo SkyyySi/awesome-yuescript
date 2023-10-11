@@ -7,37 +7,77 @@ const theme_path = filesystem.get_configuration_dir() .. "themes/dracula/"
 
 const t = {}
 
-t.font = "sans " .. tostring(math.floor(dpi(12) + 0.5))
+const fontsize = dpi(12) + 0.5 |> math.floor() |> tostring()
+t.font           = "Source Sans Pro, #{fontsize}"
+t.monospace_font = "MesloLGS NF, #{fontsize}"
 
-t.bg_normal   = "#282a36"
-t.bg_focus    = "#44475a"
+t.bg_normal   = "#1E1F29"
+t.bg_focus    = "#bd93f9"
 t.bg_urgent   = "#ff5555"
-t.bg_minimize = "#bd93f9"
+t.bg_minimize = "#44475a"
 
 t.fg_normal   = "#f8f8f2"
-t.fg_focus    = "#f8f8f2"
-t.fg_urgent   = "#282a36"
-t.fg_minimize = "#282a36"
+t.fg_focus    = "#1E1F29"
+t.fg_urgent   = "#1E1F29"
+t.fg_minimize = "#f8f8f2"
 
-t.bg_systray  = t.bg_normal
+t.bg_systray  = "#282a36"
 
 t.useless_gap         = dpi(5)
 t.border_width        = dpi(1)
-t.border_color_normal = "#44475a"
-t.border_color_active = "#44475a"
-t.border_color_marked = "#44475a"
+t.border_color_normal = "#404040"
+t.border_color_active = "#404040"
+t.border_color_marked = "#404040"
 
 --- There are other variable sets overriding the default one when defined, the sets are:
 --- taglist_[bg|fg]_[focus|urgent|occupied|empty|volatile]
---- tasklist_[bg|fg]_[focus|urgent]
+--- tasklist_[bg|fg]_[normal|focus|urgent]
 --- titlebar_[bg|fg]_[normal|focus]
 --- tooltip_[font|opacity|fg_color|bg_color|border_width|border_color]
 --- prompt_[fg|bg|fg_cursor|bg_cursor|font]
 --- hotkeys_[bg|fg|border_width|border_color|shape|opacity|modifiers_fg|label_bg|label_fg|group_margin|font|description_font]
 
+--- Taglist
+t.taglist_bg_empty    = "#282a36"
+t.taglist_bg_occupied = "#44475a"
+t.taglist_bg_focus    = "#bd93f9"
+t.taglist_bg_urgent   = "#ff5555"
+t.taglist_bg_volatile = "#f1fa8c"
+
+t.taglist_fg_empty    = "#f8f8f2"
+t.taglist_fg_occupied = "#f8f8f2"
+t.taglist_fg_focus    = "#1E1F29"
+t.taglist_fg_urgent   = "#1E1F29"
+t.taglist_fg_volatile = "#1E1F29"
+
+--- Tasklist
+t.tasklist_bg_normal   = "#282a36"
+t.tasklist_bg_minimize = "#1E1F29"
+t.tasklist_bg_focus    = "#bd93f9"
+t.tasklist_bg_urgent   = "#ff5555"
+
+t.tasklist_fg_normal   = "#f8f8f2"
+t.tasklist_fg_minimize = "#f8f8f2"
+t.tasklist_fg_focus    = "#1E1F29"
+t.tasklist_fg_urgent   = "#1E1F29"
+
+--- Titlebar
+t.titlebar_bg_normal = "#1E1F29"
+t.titlebar_bg_focus  = "#1E1F29" -- "#2F313F"
+
+t.titlebar_fg_normal = "#cbcbc5"
+t.titlebar_fg_focus  = "#f8f8f2"
+
+t.titlebar_size = dpi(32)
+
+--- Button
+t.button_bg_normal = "#282a36"
+t.button_bg_hover  = "#2F313F"
+t.button_bg_press  = "#44475a"
+
 const taglist_square_size = dpi(128)
-t.taglist_squares_sel = theme_assets.taglist_squares_sel(taglist_square_size, t.fg_normal)
-t.taglist_squares_unsel = theme_assets.taglist_squares_unsel(taglist_square_size, t.fg_normal)
+--t.taglist_squares_sel   = theme_assets.taglist_squares_sel(taglist_square_size, t.fg_normal)
+--t.taglist_squares_unsel = theme_assets.taglist_squares_unsel(taglist_square_size, t.fg_normal)
 
 -- Variables set for theming notifications:
 -- notification_font
@@ -51,6 +91,9 @@ t.taglist_squares_unsel = theme_assets.taglist_squares_unsel(taglist_square_size
 --t.menu_submenu_icon = theme_path .. "submenu.png"
 t.menu_height = dpi( 30)
 t.menu_width  = dpi(200)
+
+t.icon_size = dpi(64)
+awesome.set_preferred_icon_size(t.icon_size)
 
 t.titlebar_close_button_normal = theme_path .. "titlebar/close_normal.png"
 t.titlebar_close_button_focus  = theme_path .. "titlebar/close_focus.png"
@@ -78,7 +121,8 @@ t.titlebar_maximized_button_focus_inactive  = theme_path .. "titlebar/maximized_
 t.titlebar_maximized_button_normal_active   = theme_path .. "titlebar/maximized_normal_active.png"
 t.titlebar_maximized_button_focus_active    = theme_path .. "titlebar/maximized_focus_active.png"
 
-t.wallpaper = theme_path .. "background_transparent.png"
+--t.wallpaper = theme_path .. "background_transparent.png"
+t.wallpaper = theme_path .. "wallpaper.png"
 
 t.layout_fairh      = theme_path .. "layouts/fairhw.png"
 t.layout_fairv      = theme_path .. "layouts/fairvw.png"
@@ -97,7 +141,7 @@ t.layout_cornerne   = theme_path .. "layouts/cornernew.png"
 t.layout_cornersw   = theme_path .. "layouts/cornersww.png"
 t.layout_cornerse   = theme_path .. "layouts/cornersew.png"
 
-t.awesome_icon = theme_assets.awesome_icon(t.menu_height, t.bg_focus, t.fg_focus)
+t.awesome_icon = theme_assets.awesome_icon(t.icon_size, t.bg_minimize, t.fg_minimize)
 
 t.icon_theme = "Papirus-dark"
 

@@ -1,0 +1,89 @@
+import "awful"
+import "gears"
+import "wibox"
+import "beautiful"
+
+import Gio from "lgi"
+
+import scale, lookup_icon, lookup_gicon from "modules.lib.theme"
+
+import "modules.core.panel.common"
+
+const buttons = {
+	awful.button({},          1, ((c) -> c::activate { context: "tasklist", action: "toggle_minimization" }))
+	awful.button({ "Shift" }, 3, ((c) -> awful.menu.client_list { theme: { width: 250 } }))
+}
+
+export.<call> = (_, kwargs={}) ->
+	with kwargs
+		assert(.screen)
+		assert(.helpers)
+
+	{ :screen, :helpers } = kwargs
+
+	-- TODO: Handle apps without icons by using a fallback
+	const widget = awful.widget.tasklist {
+		screen:  screen
+		filter:  awful.widget.tasklist.filter.currenttags
+		layout:  {
+			spacing: common.item_spacing
+			layout:  helpers.auto_layout(wibox.layout.fixed)
+		}
+		widget_template: {
+			{
+				{
+					{
+						id:     "icon_role"
+						image:  beautiful.default_icon or lookup_icon("xapp") or beautiful.awesome_icon
+						widget: wibox.widget.imagebox
+					}
+					id:      "margin_role"
+					margins: common.item_spacing
+					widget:  common.wrap_constructor(() ->
+						const w = wibox.container.margin()
+						const cs = w::connect_signal
+
+						local old_cursor, old_wibox
+						cs("mouse::enter", () =>
+							@margins = common.item_spacing - scale(1)
+
+							const wb = mouse.current_wibox
+							old_cursor, old_wibox = wb.cursor, wb
+							wb.cursor = "hand1" 
+						)
+
+						cs("mouse::leave", () =>
+							@margins = common.item_spacing
+
+							if old_wibox?
+								old_wibox.cursor = old_cursor
+								old_wibox = nil
+						)
+
+						cs("button::press",   (x, y, b) =>
+							switch b
+								when 1
+									@margins = common.item_spacing + scale(1)
+						)
+
+						cs("button::release", (x, y, b) =>
+							switch b
+								when 1
+									@margins = common.item_spacing - scale(1)
+						)
+
+						w
+					)
+				}
+				id:     "background_role"
+				widget: wibox.container.background
+			}
+			border_width: beautiful.border_width
+			border_color: beautiful.border_color_normal
+			shape:        common.inner_rounded_shape
+			widget:       wibox.container.background
+		}
+		:buttons
+	}
+
+	widget

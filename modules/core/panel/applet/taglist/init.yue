@@ -1,0 +1,153 @@
+import "awful"
+import "gears"
+import "wibox"
+import "beautiful"
+
+import scale, lookup_icon, lookup_gicon from "modules.lib.theme"
+
+import "modules.core.panel.common"
+
+import foreach, is_hovered_over, item_spacing, inner_rounded_shape from common
+
+export.<call> = (_, kwargs={}) ->
+	with kwargs
+		assert(.helpers)
+
+	{ :helpers, :panel, :config } = kwargs
+
+	const taglist_create_callback = (current_tag, index, objects) =>
+		for textbox in *@get_children_by_id("index_role")
+			textbox.markup = "<b>#{current_tag.index}</b>"
+
+		const padding_callback = (w) ->
+			w.margins = helpers.if_horizontal({
+				left:  scale(12)
+				right: scale(12)
+			}, {
+				top:    scale(4)
+				bottom: scale(4)
+			})
+
+		for w in *@get_children_by_id("padding_role")
+			padding_callback(w)
+
+			panel::connect_signal("wibar::property_updated", () => padding_callback(w))
+
+		for w in *@get_children_by_id("background_role")
+			const b = beautiful
+
+			@__get_bg = () ->
+				if        current_tag.selected        then b.taglist_bg_focus    ?? b.bg_focus
+				elseif    current_tag.urgent          then b.taglist_bg_urgent   ?? b.bg_urgent
+				elseif  (#current_tag::clients()) > 0 then b.taglist_bg_occupied ?? b.bg_minimize
+				elseif    current_tag.volatile        then b.taglist_bg_volatile ?? b.border_color_marked
+				else                                       b.taglist_bg_empty    ?? b.bg_normal
+			@__update_bg = () ->
+				w.bg = if is_hovered_over(w)
+					@.__get_fg()
+				else
+					@.__get_bg()
+
+			@__get_fg = () ->
+				if        current_tag.selected        then b.taglist_fg_focus    ?? b.fg_focus    ?? b.fg_normal
+				elseif    current_tag.urgent          then b.taglist_fg_urgent   ?? b.fg_urgent   ?? b.fg_normal
+				elseif  (#current_tag::clients()) > 0 then b.taglist_fg_occupied ?? b.fg_minimize ?? b.fg_normal
+				elseif    current_tag.volatile        then b.taglist_fg_volatile ?? b.fg_normal
+				else                                       b.taglist_fg_empty    ?? b.fg_normal
+			@__update_fg = () ->
+				w.fg = if is_hovered_over(w)
+					@.__get_bg()
+				else
+					@.__get_fg()
+			
+			@__update_colors = () ->
+				@.__update_bg()
+				@.__update_fg()
+
+			with cs = w::connect_signal
+				local old_cursor, old_wibox
+
+				cs("mouse::enter", () ->
+					@.__update_colors()
+					if wb = mouse.current_wibox
+						old_cursor, old_wibox = wb.cursor, wb
+						wb.cursor = "hand1" 
+				)
+				cs("mouse::leave", () ->
+					@.__update_colors()
+					if old_wibox
+						old_wibox.cursor = old_cursor
+						old_wibox = nil
+				)
+				cs("button::press",   @__update_colors)
+				cs("button::release", @__update_colors)
+
+				cs("property::bg", @__update_fg)
+
+			@.__update_colors()
+
+	const taglist_update_callback = (current_tag, index, objects) =>
+		foreach(@get_children_by_id("index_role"), (textbox) ->
+			textbox.markup = "<b>#{current_tag.index}</b>"
+		)
+
+		gears.timer.delayed_call(() ->
+			@.__update_colors()
+		)
+
+	const taglist = awful.widget.taglist {
+		screen:  kwargs.screen
+		filter:  awful.widget.taglist.filter.all
+		layout:  {
+			spacing: item_spacing
+			layout:  helpers.auto_layout(wibox.layout.fixed) --wibox.layout.fixed[orientation]
+		}
+		widget_template: {
+			{
+				{
+					{
+						id:     "index_role"
+						halign: "center"
+						valign: "center"
+						widget: wibox.widget.textbox
+					}
+					id:     "padding_role"
+					widget: wibox.container.margin
+				}
+				id:     "background_role"
+				widget: wibox.container.background
+			}
+			shape:        inner_rounded_shape
+			border_width: scale(1)
+			border_color: beautiful.border_color_normal
+			widget:       wibox.container.background
+
+			create_callback: taglist_create_callback
+			update_callback: taglist_update_callback
+		}
+	}
+
+	panel::connect_signal("wibar::property_updated", () =>
+		taglist.base_layout = wibox.widget {
+			spacing: item_spacing
+			layout:  helpers.auto_layout(wibox.layout.fixed)
+		}
+	)
+
+	const reset_taglist_buttons = (config) ->
+		assert(config)
+		const { :modkey } = config
+		const buttons = {
+			awful.button({},         1, (t) -> t::view_only())
+			awful.button({ modkey }, 1, (t) -> if c = client.focus then c::move_to_tag(t))
+			awful.button({},         3, (t) -> awful.tag.viewtoggle(t))
+			awful.button({ modkey }, 3, (t) -> if c = client.focus then c::toggle_tag(t))
+		}
+		taglist._private.buttons = buttons
+		taglist._do_taglist_update_now()
+
+	reset_taglist_buttons(kwargs.config)
+
+	awesome.connect_signal("modules::lib::hot_config::reload", reset_taglist_buttons)
+
+	taglist

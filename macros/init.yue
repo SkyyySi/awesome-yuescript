@@ -1,0 +1,26 @@
+--- Evalueate an expression at compiletime. This shouldn't normally be nescessary since
+--- LuaJIT is should be able to do that on its own.
+export macro CONST_EVAL = (expression) ->
+	expression
+
+--- Embedd a plain Lua statement inside Yuescript code
+export macro LUA = (code) ->
+	{
+		:code
+		language: "lua"
+	}
+
+--- Verify each argument type of a function. Also adds LuaCATS annotations to compiled code.
+export macro FUNCTION = (args) ->
+	print("args = #{args}")
+
+	""
+
+export macro MAP = (items, action) ->
+	"[#{action} for _ in *#{items}]"
+
+export macro FILTER = (items, action) ->
+	"[_ for _ in *#{items} when #{action}]"
+
+export macro FOREACH = (items, action) ->
+	"for _ in *#{items} do #{action}"

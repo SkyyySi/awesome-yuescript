@@ -1,0 +1,51 @@
+import "awful"
+import "gears"
+import "wibox"
+import "beautiful"
+
+export layout = (_, width, height) =>
+	const widget = @widget
+
+	if not widget
+		return
+
+	{ wibox.widget.base.place_widget_at(widget, 0, 0, width, height) }
+
+export fit = (context, width, height) =>
+	const w, h = if @_private.widget
+		wibox.widget.base.fit_widget(@, context, @_private.widget, width, height)
+	else
+		0, 0
+
+	if (@_private.draw_empty == false) and (w == 0 or h == 0)
+		0, 0
+	else
+		w, h
+
+export set_widget = wibox.widget.base.set_widget_common
+
+export get_widget = () =>
+	return @_private.widget
+
+export get_children = () =>
+	return { @_private.widget }
+
+export set_children = (children) =>
+	@set_widget(children[1])
+
+export set_draw_empty = (draw_empty) =>
+	@_private.draw_empty = draw_empty
+	@emit_signal("widget::layout_changed")
+	@emit_signal("property::draw_empty", draw_empty)
+
+export get_draw_empty = () =>
+	@_private.draw_empty
+
+export.<call> = (cls, widget) ->
+	const self = wibox.widget.base.make_widget(nil, nil, { enable_properties: true })
+		|> gears.table.crush(cls, true)
+
+	if widget?
+		@set_widget()
+
+	self

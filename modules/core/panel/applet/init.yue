@@ -1,0 +1,2 @@
+const submodules = { "clock", "dock", "keyboard_layout", "tag_add_remove", "taglist", "tasklist" }
+export default { name, require(... .. "." .. name) for name in *submodules }

@@ -1,0 +1,77 @@
+--- Requires the `pamixer` cli utility to be installed
+
+import "awful"
+import "gears"
+import "wibox"
+import "beautiful"
+
+import crush from gears.table
+
+import "modules.lib.theme"
+
+const clamp = (value, floor, ceiling) ->
+	if value > ceiling
+		ceiling
+	elseif value < floor
+		floor
+	else
+		value
+
+const create_base_textbox = () ->
+	const font_size = math.floor(theme.scale(12) + 0.5)
+
+	const textbox = wibox.widget {
+		font:   "Source Code Pro, #{font_size}"
+		text:   "NaN%"
+		widget: wibox.widget.textbox
+	}
+
+	textbox
+
+export get_value = () =>
+	@_private.volume_value
+
+export set_value = (value) =>
+	if type(value) != "number"
+		value = assert(tonumber(value))
+	value = clamp(math.floor(value), 0, 100)
+
+	awesome.emit_signal("modules::widget::volume::volume_updated", value)
+	awful.spawn { "pamixer", "--set-volume", tostring(value) }
+
+export.<call> = (cls, kwargs={}) ->
+	local self = create_base_textbox()
+		|> crush(cls)
+		|> crush(kwargs)
+
+	awesome.connect_signal("modules::widget::volume::volume_updated", (value) ->
+		@_private.volume_value = value
+		@emit_signal("property::value", value)
+		@text = "%3d%%"::format(value)
+	)
+
+	@buttons = {
+		awful.button({}, 1, () -> awful.spawn { "pamixer", "--toggle-mute" })
+		awful.button({}, 4, () -> @value += 5)
+		awful.button({}, 5, () -> @value -= 5)
+		awful.button({ "Shift" }, 4, () -> @value += 1)
+		awful.button({ "Shift" }, 5, () -> @value -= 1)
+	}
+
+	gears.timer {
+		timeout:   1
+		autostart: true
+		call_now:  true
+		callback:  () ->
+			(stdout, stderr, reason, exit_code) <- awful.spawn.easy_async { "pamixer", "--get-volume" }
+
+			if exit_code > 0
+				--error("Something went wrong when running pamixer:\n    #{stderr::gsub('\n', '\n    ')}")
+				return
+
+			volume = stdout::match("%d+")
+
+			@value = volume
+	}
+
+	@

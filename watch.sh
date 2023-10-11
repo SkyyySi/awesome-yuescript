@@ -6,13 +6,14 @@ clear
 # LuaJIT supports some 5.2 features like `goto`
 LUA_VERSION="${LUA_VERSION:-5.2}"
 
+eval "$(luarocks --lua-version="$LUA_VERSION" path)"
+
 # yue --target="$LUA_VERSION" -w "$PWD"
 
 clear
 
 function compile() {
-	#yue -c -l --target="$LUA_VERSION" "$@"
-	yue -o '/dev/null' --target="$LUA_VERSION" "$@"
+	yue -c -l --target="$LUA_VERSION" "$@"
 }
 
 compile .

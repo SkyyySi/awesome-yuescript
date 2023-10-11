@@ -1,0 +1,399 @@
+-- TODO:
+-- * JSON hot reloading
+--   * Every part that relies on a config field needs to be changed to have an update function
+
+import "awful"
+import "gears"
+import "wibox"
+import "beautiful"
+
+import scale, lookup_icon, lookup_gicon from "modules.lib.theme"
+import volume from "modules.widget"
+
+import "modules.core.panel.applet"
+
+const unpack = unpack ?? table.unpack
+
+import "modules.core.panel.common"
+import foreach, is_hovered_over, item_spacing, _outer_spacing_base, outer_rounded_shape, inner_rounded_shape, wrap_widget, wrap_text_widget, get_has_maximized_client, parse_orientation, absolute_center, wrap_constructor from common
+
+export.<call> = (cls, kwargs={}) ->
+	with kwargs
+		assert(.screen) -- ??= screen.primary
+		assert(.config) -- ??= {}
+
+	with kwargs.config
+		.panel ??= {}
+
+	with kwargs.config.panel
+		.position ??= { [tostring(kwargs.screen.index)]: "top" }
+
+	local position, orientation, panel
+
+	const helpers = {}
+
+	helpers.get_position = () ->
+		position
+
+	helpers.get_orientation = () ->
+		orientation
+
+	helpers.is_horizontal = () ->
+		helpers.get_orientation() == "horizontal"
+
+	helpers.if_horizontal = (truthy, falsey) ->
+		if helpers.is_horizontal()
+			truthy
+		else
+			falsey
+
+	helpers.get_cross = () ->
+		helpers.if_horizontal("vertical", "horizontal")
+
+	helpers.with_widget = (widget, callback) ->
+		wrap_constructor(() ->
+			const w = widget()
+
+			callback(w)
+
+			panel::connect_signal("wibar::property_updated", () => callback(w))
+
+			w
+		)
+
+	helpers.auto_layout = (layout) ->
+		helpers.with_widget(layout[helpers.get_orientation()], (w) ->
+			w._private.dir = helpers.if_horizontal("x", "y")
+		)
+
+	helpers.oriented_margin = (main, side) ->
+		helpers.with_widget(wibox.container.margin, (w) ->
+			w.margins = helpers.if_horizontal({
+				top:    main
+				bottom: main
+				left:   side
+				right:  side
+			}, {
+				top:    side
+				bottom: side
+				left:   main
+				right:  main
+			})
+		)
+
+	local force_compact = kwargs.config.panel.force_compact[tostring(kwargs.screen.index)]
+
+	const update_position_and_orientation = (config) ->
+		force_compact  = config.panel.force_compact[tostring(kwargs.screen.index)]
+		position       = config.panel.position[tostring(kwargs.screen.index)]
+		orientation    = parse_orientation(position)
+		panel.position = position
+
+		panel::emit_signal("wibar::property_updated", panel)
+
+	panel = awful.wibar {
+		screen:   kwargs.screen
+		bg:       gears.color.transparent
+		:position
+	}
+
+	update_position_and_orientation(kwargs.config)
+
+	--[[
+	gears.timer {
+		timeout: 4
+		autostart: true
+		single_shot: true
+		callback: () ->
+			kwargs.config.panel.position = "bottom"
+			update_position_and_orientation(kwargs.config)
+	}
+
+	gears.timer {
+		timeout: 4
+		autostart: true
+		single_shot: true
+		callback: () ->
+			kwargs.config.panel.position = "left"
+			update_position_and_orientation(kwargs.config)
+	}
+	--]]
+
+	awesome.connect_signal("modules::lib::hot_config::reload", (config) ->
+		update_position_and_orientation(config)
+	)
+
+	const launcher_button = wrap_widget(awful.widget.launcher {
+		image: beautiful.awesome_icon
+		menu:  kwargs.menu
+	})
+
+	const keyboard_layout = applet.keyboard_layout {
+		screen: kwargs.screen
+		config: kwargs.config
+		:helpers
+	} --wrap_text_widget(awful.widget.keyboardlayout(), helpers.get_orientation())
+
+	const clock = applet.clock {
+		screen: kwargs.screen
+		config: kwargs.config
+		:helpers
+	}
+
+	const wibar_size_with_maximized_clients    = scale(40) + beautiful.border_width
+	const wibar_size_without_maximized_clients = scale(40) + beautiful.useless_gap*2
+
+	panel.get_size = () =>
+		if @position in { "top", "bottom" }
+			@height
+		else
+			@width
+
+	panel.set_size = (value) =>
+		if helpers.is_horizontal()
+			@height = value
+		else
+			@width = value
+
+		@emit_signal("property::size", @, value)
+
+	panel.size = wibar_size_without_maximized_clients
+
+	const taglist = applet.taglist {
+		screen: kwargs.screen
+		config: kwargs.config
+		:helpers
+		:panel
+	}
+
+	const tag_add_remove = applet.tag_add_remove {
+		screen: kwargs.screen
+		config: kwargs.config
+		:helpers
+	}
+
+	const tasklist_base = applet.tasklist {
+		:helpers
+		screen: kwargs.screen
+	}
+
+	const center_margin = helpers.oriented_margin(common.item_spacing, 0)
+
+	const tasklist = tasklist_base
+
+	const dock = applet.dock {
+		layout: helpers.auto_layout(wibox.layout.fixed)
+		:helpers
+		:orientation
+	}
+
+	const systray = if kwargs.screen == screen.primary
+		const widget = wibox.widget(wrap_widget {
+			helpers.with_widget(wibox.widget.systray, (w) ->
+				w.horizontal = helpers.is_horizontal()
+			)
+			widget: helpers.oriented_margin(beautiful.border_width + scale(2), scale(8))
+		})
+
+		gears.timer {
+			timeout:   1
+			autostart: true
+			callback:  () ->
+				const visible = awesome.systray() > 0
+
+				--- I am not sure as I haven't checked, but it's likely that setting the `.visible`
+				--- property of a widget is a lot more expensive than doing this if check.
+				--- And yes, that's premature optimization. Gross. 
+				if widget.visible != visible
+					widget.visible = visible
+		}
+
+		widget
+
+	const wibar_margin_without_maximized_clients = () -> {
+		top:    if position == "bottom" then 0 else beautiful.useless_gap*2
+		bottom: if position == "top"    then 0 else beautiful.useless_gap*2
+		left:   if position == "right"  then 0 else beautiful.useless_gap*2
+		right:  if position == "left"   then 0 else beautiful.useless_gap*2
+	}
+
+	const wibar_margin_with_maximized_clients = () -> {
+		top:    if position == "bottom" then beautiful.border_width else 0
+		bottom: if position == "top"    then beautiful.border_width else 0
+		left:   if position == "right"  then beautiful.border_width else 0
+		right:  if position == "left"   then beautiful.border_width else 0
+	}
+
+	const panel_conext_menu = awful.menu {
+		items: {}
+	}
+
+	const _and_close_menu = (fn) ->
+		() ->
+			panel_conext_menu::hide()
+			fn()
+
+	panel_conext_menu::add {
+		"Position"
+		{
+			{ "Top",    _and_close_menu(() -> kwargs.config::set("panel.position.#{kwargs.screen.index}", "top",    update_position_and_orientation)) }
+			{ "Bottom", _and_close_menu(() -> kwargs.config::set("panel.position.#{kwargs.screen.index}", "bottom", update_position_and_orientation)) }
+			{ "Left",   _and_close_menu(() -> kwargs.config::set("panel.position.#{kwargs.screen.index}", "left",   update_position_and_orientation)) }
+			{ "Right",  _and_close_menu(() -> kwargs.config::set("panel.position.#{kwargs.screen.index}", "right",  update_position_and_orientation)) }
+		}
+	}
+
+	panel_conext_menu::add {
+		"Force compact"
+		_and_close_menu(() -> kwargs.config::set("panel.force_compact.#{kwargs.screen.index}", not force_compact, update_position_and_orientation))
+	}
+
+	const panel_buttons = {
+		awful.button({}, 3, () -> panel_conext_menu::toggle())
+	}
+
+	const widget_spacer = {
+		span_ratio: 0.5
+		color:      beautiful.border_color_normal
+		thickness:  beautiful.border_width
+		widget:     helpers.with_widget(wibox.widget.separator, (w) ->
+			w.orientation = helpers.get_cross()
+
+			w.forced_width, w.forced_height = if helpers.is_horizontal()
+				beautiful.border_width, nil
+			else
+				nil, beautiful.border_width
+		)
+	}
+
+	panel.widget = wibox.widget {
+		{
+			{
+				{
+					{
+						{
+							launcher_button
+							taglist
+							--tag_add_remove(kwargs.screen)
+							spacing: item_spacing * 2
+							spacing_widget: widget_spacer
+							layout: helpers.auto_layout(wibox.layout.fixed)
+						}
+						kwargs.screen.prompt_box
+						layout: helpers.auto_layout(wibox.layout.fixed)
+					}
+					margins: common.item_spacing
+					widget:  wibox.container.margin
+				}
+				{
+					{
+						dock
+						tasklist
+						spacing: item_spacing * 2
+						spacing_widget: widget_spacer
+						layout:  helpers.auto_layout(wibox.layout.fixed)
+					}
+					widget: center_margin
+				}
+				{
+					{
+						--wrap_text_widget(volume(), helpers.get_orientation())
+						keyboard_layout
+						clock
+						systray
+						wrap_widget({
+							kwargs.screen.layoutbox
+							margins: scale(2)
+							widget:  wibox.container.margin
+						})
+						spacing: item_spacing * 2
+						--spacing_widget: widget_spacer
+						layout: helpers.auto_layout(wibox.layout.fixed)
+					}
+					margins: common.item_spacing
+					widget:  wibox.container.margin
+				}
+				buttons: panel_buttons
+				layout:  helpers.with_widget(common.absolutely_centered, (w) ->
+					w.orientation = orientation
+				)
+			}
+			id:           "background_role"
+			border_width: beautiful.border_width
+			border_color: beautiful.border_color_normal
+			shape:        outer_rounded_shape
+			bg:           beautiful.bg_normal
+			widget:       wibox.container.background
+		}
+		id:      "margin_role"
+		margins: wibar_margin_without_maximized_clients()
+		buttons: {
+			awful.button({}, 4, () -> awful.tag.viewprev(kwargs.screen))
+			awful.button({}, 5, () -> awful.tag.viewnext(kwargs.screen))
+		}
+		widget:  wibox.container.margin
+	}
+
+	on_bar_refresh = (callback) ->
+		const callback_noargs = () -> callback()
+		const s = kwargs.screen
+
+		for tag in *s.tags
+			tag::connect_signal("property::selected", callback_noargs)
+
+		s::connect_signal("property::clients", callback_noargs)
+		with cs = client.connect_signal
+			cs(  "manage", callback_noargs)
+			cs("unmanage", callback_noargs)
+			cs("property::fullscreen", callback_noargs)
+			cs("property::maximized",  callback_noargs)
+			cs("property::minimized",  callback_noargs)
+			cs("property::hidden",     callback_noargs)
+
+		panel::connect_signal("property::position", callback_noargs)
+		panel::connect_signal("wibar::property_updated", callback_noargs)
+
+	on_bar_refresh(() ->
+		if not pcall(() -> tostring(kwargs.screen?.index))
+			return
+
+		const has_maximized_client = if kwargs.config.panel.force_compact[tostring(kwargs.screen.index)]
+			true
+		else
+			get_has_maximized_client(kwargs.screen)
+
+		if has_maximized_client == nil
+			-- Error
+			return
+
+		for child in *panel.widget::get_children_by_id("background_role")
+			child.shape = if has_maximized_client
+				gears.shape.rectangle
+			else
+				outer_rounded_shape
+
+			child.border_width = if has_maximized_client
+				0
+			else
+				beautiful.border_width
+
+		for child in *panel.widget::get_children_by_id("margin_role")
+			child.margins = if has_maximized_client
+				wibar_margin_with_maximized_clients()
+			else
+				wibar_margin_without_maximized_clients()
+
+			child.color = if has_maximized_client
+				beautiful.border_color_normal
+			else
+				nil
+
+		panel.size = if has_maximized_client
+			wibar_size_with_maximized_clients
+		else
+			wibar_size_without_maximized_clients
+	)
+
+	update_position_and_orientation(kwargs.config)
+
+	panel

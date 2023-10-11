@@ -2,9 +2,9 @@ import "awful"
 import "awful.hotkeys_popup"
 import "beautiful"
 
-import lookup_icon, lookup_gicon, scale from require("modules.lib.theme")
+import lookup_icon, lookup_gicon, scale from "modules.lib.theme"
 
-import GLib, Gio from require("lgi")
+import GLib, Gio from "lgi"
 
 schema_exists = (schema) ->
 	schema_list = Gio.Settings.list_schemas()
@@ -62,29 +62,34 @@ export default (args={}) ->
 	}
 
 	const wrap = (fn) ->
-		if type(fn) == "string"
-			fn = () -> awful.spawn(fn)
+		fixed = switch type(fn)
+			when "string"
+				() -> awful.spawn.with_shell(fn)
+			when "table"
+				() -> awful.spawn(fn)
+			when "function"
+				fn
 
 		() ->
-			fn()
+			fixed()
 			menu::hide()
 
 	const menu_items_temp = {}
 
 	menu_items_temp.awesome = {
 		{ "Show hotkeys",     wrap(() -> hotkeys_popup.show_help(nil, awful.screen.focused())), lookup_icon("input-keyboard-symbolic") }
-		{ "View manual",      wrap("#{args.terminal} -e man awesome"),    lookup_icon("help-info-symbolic") }
-		{ "Edit config",      wrap("#{args.editor} #{awesome.conffile}"), lookup_icon("edit-symbolic") }
-		{ "Restart in-place", wrap(awesome.restart),                      lookup_icon("system-restart-symbolic") }
-		{ "Quit session",     wrap(awesome.quit),                         lookup_icon("exit") }
+		{ "View manual",      wrap({args.terminal, "-e", "man", "awesome"}), lookup_icon("help-info-symbolic") }
+		{ "Edit config",      wrap({ args.editor, awesome.conffile }),       lookup_icon("edit-symbolic") }
+		{ "Restart in-place", wrap(awesome.restart),                         lookup_icon("system-restart-symbolic") }
+		{ "Quit session",     wrap(awesome.quit),                            lookup_icon("exit") }
 	}
 
 	menu_items_temp.power = {
-		{ "Shutdown",  wrap("poweroff"),            lookup_icon("system-shutdown") }
-		{ "Reboot",    wrap("reboot"),              lookup_icon("system-reboot") }
-		{ "Log out",   wrap(awesome.quit),          lookup_icon("system-log-out") }
-		{ "Suspend",   wrap("systemctl suspend"),   lookup_icon("system-suspend") }
-		{ "Hibernate", wrap("systemctl hibernate"), lookup_icon("system-hibernate") }
+		{ "Shutdown",  wrap({ "gnome-session-quit", "--power-off" }), lookup_icon("system-shutdown") }
+		{ "Reboot",    wrap({ "gnome-session-quit", "--reboot" }),    lookup_icon("system-reboot") }
+		{ "Log out",   wrap({ "gnome-session-quit", "--logout" }),    lookup_icon("system-log-out") }
+		{ "Suspend",   wrap({ "systemctl", "suspend"   }),            lookup_icon("system-suspend") }
+		{ "Hibernate", wrap({ "systemctl", "hibernate" }),            lookup_icon("system-hibernate") }
 	}
 
 	const get_place = (id) ->
@@ -124,7 +129,7 @@ export default (args={}) ->
 		$CATEGORY("Other",       "applications-other")
 	}
 
-	for _, app_info in ipairs Gio.AppInfo.get_all()
+	for app_info in *Gio.AppInfo.get_all()
 		if app_info::get_boolean("NoDisplay") or not app_info::get_show_in()
 			continue
 
@@ -152,6 +157,7 @@ export default (args={}) ->
 
 	table.insert(menu_items_temp.apps, 1, do
 		const schema = "org.gnome.shell"
+
 		if not schema_exists(schema)
 			return
 
@@ -174,15 +180,16 @@ export default (args={}) ->
 
 		table.insert(menu_items_temp.apps, app_list)
 
-	menu::add({ "awesome",     menu_items_temp.awesome, beautiful.awesome_icon })
-	menu::add({ "Power",       menu_items_temp.power,   lookup_icon("system-shutdown-symbolic") })
-	menu::add({ "Places",      menu_items_temp.places,  lookup_icon("folder") })
-	menu::add({ "Apps",        menu_items_temp.apps,    lookup_icon("applications-all") })
+	with menu
+		::add({ "awesome",     menu_items_temp.awesome, beautiful.awesome_icon })
+		::add({ "Power",       menu_items_temp.power,   lookup_icon("system-shutdown-symbolic") })
+		::add({ "Places",      menu_items_temp.places,  lookup_icon("folder") })
+		::add({ "Apps",        menu_items_temp.apps,    lookup_icon("applications-all") })
 
-	menu::add({ "Terminal",    wrap(args.terminal),     lookup_icon("terminal") })
-	menu::add({ "Filemanager", wrap(args.filemanager),  lookup_icon("system-file-manager") })
-	menu::add({ "Webbrowser",  wrap(args.browser),      lookup_icon("browser") })
+		::add({ "Terminal",    wrap(args.terminal),     lookup_icon("terminal") })
+		::add({ "Filemanager", wrap(args.filemanager),  lookup_icon("system-file-manager") })
+		::add({ "Webbrowser",  wrap(args.browser),      lookup_icon("browser") })
 
-	menu::update()
+		::update()
 
 	menu

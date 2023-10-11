@@ -1,23 +1,30 @@
 import "awful"
 import "menubar"
+import "awful.hotkeys_popup"
 
-import hotkeys_popup, key, button from awful
+import key, button from awful
 
-macro INFO = (description, group) ->
-	"{ description: #{description}, group: #{group} }"
+const info = (description, group) ->
+	{ :description, :group }
 
-export default (config, main_menu) ->
+export default (kwargs={}) ->
+	with kwargs
+		assert(.config)
+		assert(.menu)
+
+	{ :config, :menu } = kwargs
+
 	awful.mouse.append_global_mousebindings {
-		button({}, 3, (() -> main_menu::toggle())),
-		button({}, 4, awful.tag.viewprev),
-		button({}, 5, awful.tag.viewnext),
+		button({}, 3, (() -> menu::toggle()))
+		button({}, 4, awful.tag.viewprev)
+		button({}, 5, awful.tag.viewnext)
 	}
 
 	awful.keyboard.append_global_keybindings {
-		key({ config.modkey },            "s", (() -> hotkeys_popup.show_help()), $INFO("show help",      "awesome"))
-		key({ config.modkey },            "w", (() -> main_menu::show()),         $INFO("show main menu", "awesome"))
-		key({ config.modkey, "Control" }, "r", (() -> awesome.restart()),         $INFO("reload awesome", "awesome"))
-		key({ config.modkey, "Shift"   }, "q", (() -> awesome.quit()),            $INFO("quit awesome",   "awesome"))
+		key({ config.modkey },            "s", (() -> hotkeys_popup.show_help()), info("show help",      "awesome"))
+		key({ config.modkey },            "w", (() -> menu::show()),              info("show main menu", "awesome"))
+		key({ config.modkey, "Control" }, "r", (() -> awesome.restart()),         info("reload awesome", "awesome"))
+		key({ config.modkey, "Shift"   }, "q", (() -> awesome.quit()),            info("quit awesome",   "awesome"))
 		key({ config.modkey },            "x", (() ->
 			awful.prompt.run {
 				prompt:       "Run Lua code: "
@@ -25,46 +32,46 @@ export default (config, main_menu) ->
 				exe_callback: awful.util.eval
 				history_path: awful.util.get_cache_dir() .. "/history_eval"
 			}
-		), $INFO("lua execute prompt", "awesome"))
-		key({ config.modkey }, "Return", (() -> awful.spawn(config.terminal)),             $INFO("open a terminal",  "launcher"))
-		key({ config.modkey }, "r",      (() -> awful.screen.focused().prompt_box::run()), $INFO("run prompt",       "launcher"))
-		key({ config.modkey }, "p",      (() -> menubar.show()),                           $INFO("show the menubar", "launcher"))
+		), info("lua execute prompt", "awesome"))
+		key({ config.modkey }, "Return", (() -> awful.spawn(config.terminal)),             info("open a terminal",  "launcher"))
+		key({ config.modkey }, "r",      (() -> awful.screen.focused().prompt_box::run()), info("run prompt",       "launcher"))
+		key({ config.modkey }, "p",      (() -> menubar.show()),                           info("show the menubar", "launcher"))
 	}
 
 	awful.keyboard.append_global_keybindings {
-		key({ config.modkey }, "Left",   (() -> awful.tag.viewprev()),        $INFO("view previous", "tag"))
-		key({ config.modkey }, "Right",  (() -> awful.tag.viewnext()),        $INFO("view next",     "tag"))
-		key({ config.modkey }, "Escape", (() -> awful.tag.history.restore()), $INFO("go back",       "tag"))
+		key({ config.modkey }, "Left",   (() -> awful.tag.viewprev()),        info("view previous", "tag"))
+		key({ config.modkey }, "Right",  (() -> awful.tag.viewnext()),        info("view next",     "tag"))
+		key({ config.modkey }, "Escape", (() -> awful.tag.history.restore()), info("go back",       "tag"))
 	}
 
 	awful.keyboard.append_global_keybindings {
-		key({ config.modkey }, "j",   (() -> awful.client.focus.byidx( 1)), $INFO("focus next by index",     "client"))
-		key({ config.modkey }, "k",   (() -> awful.client.focus.byidx(-1)), $INFO("focus previous by index", "client"))
+		key({ config.modkey }, "j",   (() -> awful.client.focus.byidx( 1)), info("focus next by index",     "client"))
+		key({ config.modkey }, "k",   (() -> awful.client.focus.byidx(-1)), info("focus previous by index", "client"))
 		key({ config.modkey }, "Tab", (() ->
 			awful.client.focus.history.previous()
 			if c = client.focus
 				c::raise()
-		), $INFO("go back", "client"))
-		key({ config.modkey, "Control" }, "j", (() -> awful.screen.focus_relative( 1)), $INFO("focus the next screen",     "screen"))
-		key({ config.modkey, "Control" }, "k", (() -> awful.screen.focus_relative(-1)), $INFO("focus the previous screen", "screen"))
+		), info("go back", "client"))
+		key({ config.modkey, "Control" }, "j", (() -> awful.screen.focus_relative( 1)), info("focus the next screen",     "screen"))
+		key({ config.modkey, "Control" }, "k", (() -> awful.screen.focus_relative(-1)), info("focus the previous screen", "screen"))
 		key({ config.modkey, "Control" }, "n", (() ->
 			if c = awful.client.restore()
 				c::activate { raise: true, context: "key.unminimize" }
-		), $INFO("restore minimized", "client"))
+		), info("restore minimized", "client"))
 	}
 
 	awful.keyboard.append_global_keybindings {
-		key({ config.modkey, "Shift" },   "j", (() -> awful.client.swap.byidx( 1)),         $INFO("swap with next client by index",        "client")),
-		key({ config.modkey, "Shift" },   "k", (() -> awful.client.swap.byidx(-1)),         $INFO("swap with previous client by index",    "client")),
-		key({ config.modkey },            "u", (() -> awful.client.urgent.jumpto()),        $INFO("jump to urgent client",                 "client")),
-		key({ config.modkey },            "l", (() -> awful.tag.incmwfact( 0.05)),          $INFO("increase master width factor",          "layout")),
-		key({ config.modkey },            "h", (() -> awful.tag.incmwfact(-0.05)),          $INFO("decrease master width factor",          "layout")),
-		key({ config.modkey, "Shift" },   "h", (() -> awful.tag.incnmaster( 1, nil, true)), $INFO("increase the number of master clients", "layout")),
-		key({ config.modkey, "Shift" },   "l", (() -> awful.tag.incnmaster(-1, nil, true)), $INFO("decrease the number of master clients", "layout")),
-		key({ config.modkey, "Control" }, "h", (() -> awful.tag.incncol( 1, nil, true)),    $INFO("increase the number of columns",        "layout")),
-		key({ config.modkey, "Control" }, "l", (() -> awful.tag.incncol(-1, nil, true)),    $INFO("decrease the number of columns",        "layout")),
-		key({ config.modkey },          "space", (() -> awful.layout.inc( 1)), $INFO("select next",     "layout")),
-		key({ config.modkey, "Shift" }, "space", (() -> awful.layout.inc(-1)), $INFO("select previous", "layout")),
+		key({ config.modkey, "Shift" },   "j", (() -> awful.client.swap.byidx( 1)),         info("swap with next client by index",        "client")),
+		key({ config.modkey, "Shift" },   "k", (() -> awful.client.swap.byidx(-1)),         info("swap with previous client by index",    "client")),
+		key({ config.modkey },            "u", (() -> awful.client.urgent.jumpto()),        info("jump to urgent client",                 "client")),
+		key({ config.modkey },            "l", (() -> awful.tag.incmwfact( 0.05)),          info("increase master width factor",          "layout")),
+		key({ config.modkey },            "h", (() -> awful.tag.incmwfact(-0.05)),          info("decrease master width factor",          "layout")),
+		key({ config.modkey, "Shift" },   "h", (() -> awful.tag.incnmaster( 1, nil, true)), info("increase the number of master clients", "layout")),
+		key({ config.modkey, "Shift" },   "l", (() -> awful.tag.incnmaster(-1, nil, true)), info("decrease the number of master clients", "layout")),
+		key({ config.modkey, "Control" }, "h", (() -> awful.tag.incncol( 1, nil, true)),    info("increase the number of columns",        "layout")),
+		key({ config.modkey, "Control" }, "l", (() -> awful.tag.incncol(-1, nil, true)),    info("decrease the number of columns",        "layout")),
+		key({ config.modkey },          "space", (() -> awful.layout.inc( 1)), info("select next",     "layout")),
+		key({ config.modkey, "Shift" }, "space", (() -> awful.layout.inc(-1)), info("select previous", "layout")),
 	}
 
 	const numrow_key = (modifiers, description, on_press) ->
@@ -128,24 +135,24 @@ export default (config, main_menu) ->
 			key({ config.modkey }, "f", ((c) ->
 				c.fullscreen = not c.fullscreen
 				c::raise()
-			), $INFO("toggle fullscreen", "client")),
-			key({ config.modkey, "Shift" }, "c", ((c) -> c::kill()), $INFO("close", "client")),
-			key({ config.modkey, "Control" }, "space",  awful.client.floating.toggle, $INFO("toggle floating", "client")),
-			key({ config.modkey, "Control" }, "Return", ((c) -> c::swap(awful.client.getmaster())), $INFO("move to master", "client")),
-			key({ config.modkey }, "o", ((c) -> c::move_to_screen()),   $INFO("move to screen", "client")),
-			key({ config.modkey }, "t", ((c) -> c.ontop = not c.ontop), $INFO("toggle keep on top", "client")),
-			key({ config.modkey }, "n", ((c) -> c.minimized = true),    $INFO("minimize", "client")),
-			key({ config.modkey }, "m", ((c) ->
+			), info("toggle fullscreen", "client")),
+			key({ config.modkey, "Shift" }, "c", ((c) -> c::kill()), info("close", "client")),
+			key({ config.modkey, "Control" }, "space",  awful.client.floating.toggle, info("toggle floating", "client")),
+			key({ config.modkey, "Control" }, "Return", ((c) -> c::swap(awful.client.getmaster())), info("move to master", "client")),
+			key({ config.modkey }, "o", ((c) -> c::move_to_screen()),   info("move to screen", "client")),
+			key({ config.modkey }, "t", ((c) -> c.ontop = not c.ontop), info("toggle keep on top", "client")),
+			key({ config.modkey }, "n", ((c) -> c.minimized = true),    info("minimize", "client")),
+			key({ config.modkey }, "f", ((c) ->
 				c.maximized = not c.maximized
 				c::raise()
-			), $INFO("(un)maximize", "client")),
-			key({ config.modkey, "Control" }, "m", ((c) ->
+			), info("(un)maximize", "client")),
+			key({ config.modkey, "Control" }, "f", ((c) ->
 				c.maximized_vertical = not c.maximized_vertical
 				c::raise()
-			), $INFO("(un)maximize vertically", "client")),
-			key({ config.modkey, "Shift" }, "m", ((c) ->
+			), info("(un)maximize vertically", "client")),
+			key({ config.modkey, "Shift" }, "f", ((c) ->
 				c.maximized_horizontal = not c.maximized_horizontal
 				c::raise()
-			), $INFO("(un)maximize horizontally", "client")),
+			), info("(un)maximize horizontally", "client")),
 		}
 	)

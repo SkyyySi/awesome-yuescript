@@ -1,0 +1,36 @@
+{
+	env: {
+		QT_QPA_PLATFORMTHEME: "qt5ct"
+	},
+	editor: "code-oss",
+	rules: {},
+	autostart: [
+		[
+			"pasystray"
+		],
+		[
+			"flameshot"
+		],
+		[
+			"nm-applet"
+		],
+		[
+			"picom",
+			"--config",
+			"%{AWESOME:CONFIG_DIR}/config/picom/picom.conf"
+		]
+	],
+	panel: {
+		position: {
+			"2": "bottom",
+			"1": "bottom"
+		},
+		force_compact: {
+			"2": true,
+			"1": true
+		}
+	},
+	theme: "dracula",
+	modkey: "Mod4",
+	terminal: "konsole"
+}

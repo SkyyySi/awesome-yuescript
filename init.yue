@@ -1,62 +1,72 @@
 pcall(require, "luarocks.loader")
 
-import "gears"
+do
+	const version = _VERSION::match("Lua (%d+.%d+)")
+	const base = ";#{os.getenv('HOME')}/.luarocks/share/lua/#{version}"
+	const cbase = ";#{os.getenv('HOME')}/.luarocks/lib/lua/#{version}"
+	package.path  ..= "#{base }/?.lua#{base}/?/init.lua"
+	package.cpath ..= "#{cbase}/?.so#{cbase}/?/init.so"
+
+import "naughty"
+
+import "yue"
+
+naughty.connect_signal("request::display_error", (message, startup) ->
+	naughty.notification {
+		timeout: 0
+		urgency: "critical"
+		title:   "Oops, an error happened during " .. (if startup then "startup!" else "runtime!")
+		message: yue.traceback(message, 1)
+	}
+)
+
 import "awful"
+import "gears"
 require "awful.autofocus"
 import "wibox"
 import "beautiful"
-import "naughty"
 import "ruled"
 import "menubar"
 import "awful.hotkeys_popup"
 require "awful.hotkeys_popup.keys"
-
-import "yue"
 
 import "lgi"
 import cairo, GLib, Gio from lgi
 const Gtk = lgi.require("Gtk", "3.0")
 const Gdk = lgi.require("Gdk", "3.0")
 
+global notify = (message, timeout=5) ->
+	naughty.notification {
+		urgency: "normal"
+		message: tostring(message)
+		:timeout
+	}
+
 import awesome, client, screen from _G
 
 import "modules"
 import lookup_icon, scale from modules.lib.theme
+import json from modules.lib
 
-naughty.connect_signal("request::display_error", (message, startup) ->
-	naughty.notification {
-		timeout: 0
-		urgency: "critical"
-		title:   "<b>Oops, an error happened during " .. (if startup then "startup!" else "runtime!</b>")
-		message: yue.traceback(message, 1)
-	}
-)
+const config_dir = gears.filesystem.get_configuration_dir()
 
-const autostart = {
-	if os.getenv("IS_XEPHYR") == "true"
-		{ "printf", "%s\\n", "Skipped running picom since you're using Xephyr" }
-	else
-		{ "picom", "--config", (gears.filesystem.get_configuration_dir() .. "config/picom/picom.conf") }
-}
+const config = modules.lib.hot_config.load("#{config_dir}/config.json")
 
-for app in *autostart
-	(stdout, stderr, reason, exit_code) <- awful.spawn.easy_async { "pgrep", "-f", "-U", os.getenv("USER"), app[1] }
+menubar.utils.terminal = config.terminal
+
+for k, v in pairs(config.env)
+	GLib.setenv(k, v, true)
+
+for command in *config.autostart
+	(stdout, stderr, reason, exit_code) <- awful.spawn.easy_async { "pgrep", "-f", "-U", os.getenv("USER"), command[1] }
 
 	if exit_code == 0
 		return
 
-	awful.spawn(app)
-
--- TODO: Offload this into a separate config.json file, which supports hot reload
-const config = {
-	terminal:    "konsole"
-	editor:      "code-oss"
-	modkey:      "Mod4"
-	theme:       "dracula"
-}
+	awful.spawn(command)
 
 try
-	const theme = yue.dofile(gears.filesystem.get_configuration_dir() .. "themes/#{config.theme}/theme.yue")
+	const theme = dofile("#{config_dir}/themes/#{config.theme}/theme.lua")
 
 	beautiful.init(theme)
 catch err
@@ -67,15 +77,10 @@ catch err
 	}
 
 const edit_config = () ->
-	awful.spawn { config.editor, gears.filesystem.get_configuration_dir() }
+	awful.spawn { config.editor, config_dir }
 
-menubar.utils.terminal = config.terminal
-
-const main_menu = modules.core.menu(config)
-
-const launcher_button = awful.widget.launcher {
-	image: beautiful.awesome_icon
-	menu:  main_menu
+const main_menu = modules.core.menu {
+	...config
 }
 
 tag.connect_signal("request::default_layouts", () ->
@@ -105,11 +110,12 @@ tag.connect_signal("request::default_layouts", () ->
 
 screen.connect_signal("request::wallpaper", (s) ->
 	awful.wallpaper {
-		screen: s,
+		screen: s
 		widget: {
 			{
 				{
 					image:     beautiful.wallpaper
+					--image:     beautiful.theme_assets.wallpaper(beautiful.bg_normal, beautiful.fg_normal, beautiful.bg_focus, s)
 					upscale:   true
 					downscale: true
 					widget:    wibox.widget.imagebox
@@ -124,10 +130,6 @@ screen.connect_signal("request::wallpaper", (s) ->
 		}
 	}
 )
-
-const keyboard_layout = awful.widget.keyboardlayout()
-
-const clock = wibox.widget.textclock()
 
 screen.connect_signal("request::desktop_decoration", (s) ->
 	awful.tag([ tostring(i) for i = 1, 9 ], s, awful.layout.layouts[1])
@@ -144,186 +146,14 @@ screen.connect_signal("request::desktop_decoration", (s) ->
 		}
 	}
 
-	s.taglist = awful.widget.taglist {
-		screen:  s
-		filter:  awful.widget.taglist.filter.all
-		widget_template: {
-			{
-				{
-					{
-						id:     "text_role"
-						widget: wibox.widget.textbox
-					}
-					layout: wibox.layout.fixed.horizontal
-				}
-				left:   scale(12)
-				right:  scale(12)
-				widget: wibox.container.margin
-			}
-			id:     "background_role"
-			widget: wibox.container.background
-		}
-		buttons: {
-			awful.button({},                1, ((t) -> t::view_only()))
-			awful.button({ config.modkey }, 1, ((t) -> if c = client.focus then c::move_to_tag(t)))
-			awful.button({},                3, (()  -> awful.tag.viewtoggle()))
-			awful.button({ config.modkey }, 3, ((t) -> if c = client.focus then c::toggle_tag(t)))
-			awful.button({},                4, ((t) -> awful.tag.viewprev(t.screen)))
-			awful.button({},                5, ((t) -> awful.tag.viewnext(t.screen)))
-		}
-	}
-
-	s.tasklist = awful.widget.tasklist {
-		screen:  s,
-		filter:  awful.widget.tasklist.filter.currenttags,
-		buttons: {
-			awful.button({}, 1, ((c) -> c::activate { context: "tasklist", action: "toggle_minimization" })),
-			awful.button({}, 3, (() -> awful.menu.client_list { theme: { width: 250 } })),
-			awful.button({}, 4, (() -> awful.client.focus.byidx(-1))),
-			awful.button({}, 5, (() -> awful.client.focus.byidx( 1))),
-		}
-	}
-
-	s.panel = awful.wibar {
-		position: "top",
-		screen:   s,
-		widget:   {
-			{
-				launcher_button
-				s.taglist
-				s.prompt_box
-				layout: wibox.layout.fixed.horizontal
-			}
-			{
-				widget: s.tasklist
-			}
-			{
-				keyboard_layout
-				wibox.widget.systray()
-				clock
-				s.layoutbox
-				layout: wibox.layout.fixed.horizontal
-			}
-			layout: wibox.layout.align.horizontal
-		}
+	require("modules.core.panel"){
+		screen: s
+		menu: main_menu
+		:config
 	}
 )
 
-modules.core.input_bindings(config, main_menu)
-
-ruled.client.connect_signal("request::rules", () ->
-	ruled.client.append_rule {
-		id:         "global"
-		rule:       {}
-		properties: {
-			focus:     awful.client.focus.filter
-			raise:     true
-			screen:    awful.screen.preferred
-			placement: awful.placement.no_overlap + awful.placement.no_offscreen
-		}
-	}
-
-	ruled.client.append_rule {
-		id:       "floating"
-		rule_any: {
-			instance: {
-				"copyq"
-				"pinentry"
-			}
-			class:    {
-				"Arandr"
-				"Blueman-manager"
-				"Gpick"
-				"Kruler"
-				"Sxiv"
-				"Tor Browser"
-				"Wpa_gui"
-				"veromix"
-				"xtightvncviewer"
-			}
-			name: {
-				"Event Tester"  -- xev.
-			}
-			role: {
-				"AlarmWindow"    -- Thunderbird's calendar.
-				"ConfigManager"  -- Thunderbird's about:config.
-				"pop-up"         -- e.g. Google Chrome's (detached) Developer Tools.
-			}
-		},
-		properties: {
-			floating: true
-		}
-	}
-
-	ruled.client.append_rule {
-		id:         "titlebars"
-		rule_any:   {
-			type: {
-				"normal"
-				"dialog"
-			}
-		}
-		properties: {
-			titlebars_enabled: true
-		}
-	}
-)
-
-client.connect_signal("request::titlebars", (c) ->
-	if c.requests_no_titlebar
-		return
-
-	-- buttons for the titlebar
-	const buttons = {
-		awful.button({}, 1, () -> c::activate { context: "titlebar", action: "mouse_move" })
-		awful.button({}, 3, () -> c::activate { context: "titlebar", action: "mouse_resize" })
-	}
-
-	const top = awful.titlebar(c, position: "top")
-
-	top.widget = {
-		{
-			{
-				widget:  awful.titlebar.widget.iconwidget(c)
-				buttons: buttons
-			}
-			awful.titlebar.widget.floatingbutton(c)
-			awful.titlebar.widget.stickybutton(c)
-			awful.titlebar.widget.ontopbutton(c)
-			layout:  wibox.layout.fixed.horizontal
-		}
-		{
-			{
-				halign: "center",
-				widget: awful.titlebar.widget.titlewidget(c)
-			}
-			buttons: buttons,
-			layout:  wibox.layout.flex.horizontal
-		}
-		{
-			awful.titlebar.widget.minimizebutton(c)
-			awful.titlebar.widget.maximizedbutton(c)
-			awful.titlebar.widget.closebutton(c)
-			layout: wibox.layout.fixed.horizontal()
-		}
-		layout: wibox.layout.align.horizontal
-	}
-)
-
-ruled.notification.connect_signal("request::rules", () ->
-	ruled.notification.append_rule {
-		rule:       {}
-		properties: {
-			screen:           awful.screen.preferred
-			implicit_timeout: 5
-		}
-	}
-)
-
-naughty.connect_signal("request::display", (n) ->
-	naughty.layout.box { notification: n }
-)
-
-client.connect_signal("mouse::enter", (c) ->
-	c::activate { context: "mouse_enter", raise: false }
-)
+modules.core.input_bindings({ :config, menu: main_menu })
+modules.core.rules({ :config })
+modules.core.titlebar({ :config })
+modules.core.client({ :config })

@@ -1,2 +1,2 @@
-export core = require("modules.core")
-export lib  = require("modules.lib")
+const submodules = { "core", "lib", "widget" }
+export default { name, require(... .. "." .. name) for name in *submodules }
