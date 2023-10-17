@@ -153,7 +153,24 @@ screen.connect_signal("request::desktop_decoration", (s) ->
 	}
 )
 
-modules.core.input_bindings({ :config, menu: main_menu })
-modules.core.rules({ :config })
-modules.core.titlebar({ :config })
-modules.core.client({ :config })
+modules.core.input_bindings { :config, menu: main_menu }
+modules.core.rules { :config }
+modules.core.titlebar { :config }
+modules.core.client { :config }
+
+--[[
+do
+	const box = wibox {
+		height:  scale(50)
+		width:   scale(300)
+		visible: true
+		ontop:   true
+		bg:      "#202020"
+	}
+
+	awful.placement.bottom_left(box, { honor_workarea: true, margins: scale(5) })
+
+	box.widget = wibox.widget {
+		widget: modules.widget.inputbox
+	}
+--]]

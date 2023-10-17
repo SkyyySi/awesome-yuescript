@@ -9,3 +9,16 @@ export clamp = (value, floor, ceiling) ->
 const { floor: math_floor } = math
 export round = (value) ->
 	math_floor(value + 0.5)
+
+export sum = (t) ->
+	local result = 0
+
+	for _, v in pairs(t)
+		result += v
+
+	result
+
+export average = (t) ->
+	local sumed = sum(t)
+
+	sumed / #t

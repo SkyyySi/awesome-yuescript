@@ -1,2 +1,2 @@
-const submodules = { "volume" }
+const submodules = { "inputbox", "volume" }
 export default { name, require(... .. "." .. name) for name in *submodules }

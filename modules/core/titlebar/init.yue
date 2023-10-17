@@ -3,77 +3,246 @@ import "gears"
 import "wibox"
 import "beautiful"
 
+import scale, lookup_icon from "modules.lib.theme"
+
+import "modules.core.panel.common"
+
+const unpack = unpack ?? table.unpack
+
 import iconwidget, floatingbutton, stickybutton, ontopbutton, titlewidget, minimizebutton, maximizedbutton, closebutton from awful.titlebar.widget
 
-export default (kwargs={}) ->
+import average from "modules.lib.math"
+import split from "modules.lib.string"
+
+local client_volumes = {}
+export get_average_volume_of_sink_input = (sink_id) ->
+	const sink_id_str = tostring(sink_id)
+
+	(stdout) <- awful.spawn.easy_async({ "pulsemixer", "--list-sinks" })
+
+	for _,line in pairs(split(stdout, "\n")) do
+		line = line::match("Sink%sinput:%s.*ID:%ssink%-input%-.*#{sink_id_str}.*")
+
+		if line
+			line = line
+				::match("Volumes:%s%[.*%]")
+				::gsub("Volumes:", "")
+				::gsub("'", "")
+				::gsub("%s", "")
+				::gsub("%[", "")
+				::gsub("%]", "")
+				::gsub("%%", "")
+
+			const vols = split(line, ",")
+			const vols_n = [tonumber(v) or 0 for k, v in pairs(vols)]
+
+			const vol = math.floor(average(vols_n))
+			client_volumes[sink_id] = vol
+			awesome.emit_signal("pulseaudio::volume_of_sink_input", sink_id, vol)
+
+			break
+
+const get_ids_command = [===[
+pacmd list-sink-inputs |
+	tr '\n' '\r' |
+	perl -pe 's/.*? *index: ([0-9]+).+?application\.process\.id = "([^\r]+)"\r.+?(?=index:|$)/\2:\1\r/g' |
+	tr '\r' '\n'
+]===]
+-- "index: (%d+).*volume: front%-left: %d+ / ([%d.]+)%% / [%d.]+ dB,+%s+front%-right: %d+ / ([%d.]+)%% / [%d.]+"
+
+local clients_pids_with_pulse_sink_input_id = {}
+const pulse_sink_input_id_with_clients_pids = {}
+export get_clients_pids_with_pulse_sink_input_id = () ->
+	(stdout, stderr, reason, exit_code) <- awful.spawn.easy_async_with_shell(get_ids_command)
+
+	clients_pids_with_pulse_sink_input_id = {}
+
+	for _, line in pairs(split(stdout, "\n")) do
+		local pid, id = line::match("([^:]+):([^:]+)")
+		local pid_n   = tonumber(pid) --or 1
+		local id_n    = tonumber(id) --or 1
+
+		if not (pid_n and id_n)
+			return
+
+		--notify("line  = '#{line}'\npid_n = #{pid_n}\nid_n  = #{id_n}", 1)
+
+		clients_pids_with_pulse_sink_input_id[pid_n] = id_n
+		pulse_sink_input_id_with_clients_pids[id_n]  = pid_n
+
+		awesome.emit_signal("pulseaudio::client_is_sink_input", pid_n, id_n)
+
+gears.timer {
+	timeout:   0.5
+	call_now:  true
+	autostart: true
+	callback:  () ->
+		for k, v in pairs(clients_pids_with_pulse_sink_input_id)
+			get_average_volume_of_sink_input(v)
+
+		get_clients_pids_with_pulse_sink_input_id()
+}
+
+local set_client_volume = (vol, sink_id) ->
+	awful.spawn { "pulsemixer", "--set-volume", tostring(vol), "--id", "sink-input-#{sink_id}" }
+
+local volume_slider = (kwargs={}) ->
+	with kwargs
+		assert(.client)
+
+	local pid = kwargs.client.pid
+	local sink_id
+
+	const slider = wibox.widget {
+		bar_shape:           gears.shape.rounded_bar
+		bar_height:          4
+		bar_color:           beautiful.titlebar_fg_normal
+		handle_color:        beautiful.titlebar_bg_normal
+		handle_shape:        gears.shape.circle
+		handle_border_color: beautiful.titlebar_fg_normal
+		handle_border_width: 1
+		minimum:             0
+		maximum:             100
+		value:               50
+		visible:             false
+		forced_width:        scale(200)
+		widget:              wibox.widget.slider
+	}
+
+	const widget = wibox.widget {
+		slider
+		layout: wibox.layout.fixed.horizontal
+	}
+
+	const update_visibility = () ->
+		slider.visible = clients_pids_with_pulse_sink_input_id[pid]?
+
+	update_visibility()
+
+	--slider::connect_signal("button::press",   () => @_is_currently_pressed = true)
+	--slider::connect_signal("button::release", () => @_is_currently_pressed = false)
+
+	slider::connect_signal("property::value", (w) ->
+		set_client_volume(w.value, sink_id)
+	)
+
+	awesome.connect_signal("pulseaudio::volume_of_sink_input", (sink_id_sig, vol) ->
+		if type(vol) != "number" then
+			return
+
+		if slider._is_currently_pressed
+			return
+
+		if pulse_sink_input_id_with_clients_pids[sink_id_sig] != pid then
+			return
+
+		sink_id = sink_id_sig
+		slider.value = vol
+	)
+
+	awesome.connect_signal("pulseaudio::client_is_sink_input", (pid_sig, sink_id_sig) ->
+		if pid_sig != pid
+			return
+
+		update_visibility()
+	)
+
+	widget
+
+export.<call> = (_, kwargs={}) ->
 	with kwargs
 		assert(.config)
 
-	client.connect_signal("request::titlebars", (c) ->
+	(c) <- client.connect_signal("request::titlebars")
 
-		if c.requests_no_titlebar
-			return
+	if c.requests_no_titlebar
+		return
 
-		const buttons = {
-			awful.button({}, 1, () -> c::activate { context: "titlebar", action: "mouse_move" })
-			awful.button({}, 3, () -> c::activate { context: "titlebar", action: "mouse_resize" })
+	const items = {
+		{ "Close",        () -> c::kill() }
+		{ "Maximize",     () -> c.maximized = not c.maximized }
+		{ "Minimize",     () -> c.minimized = not c.minimized }
+		{ "Sticky",       () -> c.sticky    = not c.sticky }
+		{ "Float / tile", () -> c.floating  = not c.floating }
+		{ "Keep above",   () ->
+			c.below = false
+			c.above = not c.above
 		}
+		{ "Keep below",   () ->
+			c.above = false
+			c.below = not c.below
+		}
+	}
 
-		--- When adding a titlebar, the total width/height of a client changes. This
-		--- results in clients growing with each restart of awesome. That's not an
-		--- issue as long as your client is tiled, but when it's maximized or floating,
-		--- it can get pretty annoying. Thus, we store the size before adding any
-		--- titlebars, and set those values on `c` at the bottom of this function.
-		const {width: width_before, height: height_before} = c
+	c.title_bar_menu = awful.menu {
+		:items
+	}
 
-		const main = awful.titlebar(c, {
-			position: "top"
-			size:     beautiful.titlebar_size
-		})
+	const buttons = {
+		awful.button({}, 1, () -> c::activate { context: "titlebar", action: "mouse_move" })
+		awful.button({}, 2, () -> c.title_bar_menu::toggle())
+		awful.button({}, 3, () -> c::activate { context: "titlebar", action: "mouse_resize" })
+	}
 
-		main.widget = {
+	--- When adding a titlebar, the total width/height of a client changes. This
+	--- results in clients growing with each restart of awesome. That's not an
+	--- issue as long as your client is tiled, but when it's maximized or floating,
+	--- it can get pretty annoying. Thus, we store the size before adding any
+	--- titlebars, and set those values on `c` at the bottom of this function.
+	const { width: width_before, height: height_before } = c
+
+	const main = awful.titlebar(c, {
+		position: "top"
+		size:     beautiful.titlebar_size
+	})
+
+	main.widget = {
+		{
 			{
 				{
-					{
-						iconwidget(c)
-						margins: 4
-						widget:  wibox.container.margin
-						buttons: buttons
+					iconwidget(c)
+					margins: 4
+					widget:  wibox.container.margin
+					buttons: {
+						awful.button({}, 3, () -> c.title_bar_menu::toggle())
 					}
-					floatingbutton(c)
-					stickybutton(c)
-					ontopbutton(c)
-					layout:  wibox.layout.fixed.horizontal
 				}
-				{
-					{
-						halign: "center"
-						widget: titlewidget(c)
-					}
-					buttons: buttons
-					expand:  "outside"
-					layout:  wibox.layout.align.horizontal
+				floatingbutton(c)
+				stickybutton(c)
+				ontopbutton(c)
+				volume_slider {
+					client: c
 				}
-				{
-					minimizebutton(c)
-					maximizedbutton(c)
-					closebutton(c)
-					layout: wibox.layout.fixed.horizontal()
-				}
-				layout: wibox.layout.align.horizontal
+				layout:  wibox.layout.fixed.horizontal
 			}
-			bg: gears.color {
-				type:  "linear"
-				from:  { 0, 0 }
-				to:    { 0, beautiful.titlebar_size }
-				stops: {
-					{ 0, "#FFFFFF08" }
-					{ 1, "#FFFFFF00" }
+			{
+				{
+					halign: "center"
+					widget: titlewidget(c)
 				}
+				buttons: buttons
+				expand:  "outside"
+				layout:  wibox.layout.align.horizontal
 			}
-			widget: wibox.container.background
+			{
+				minimizebutton(c)
+				maximizedbutton(c)
+				closebutton(c)
+				layout: wibox.layout.fixed.horizontal()
+			}
+			layout: wibox.layout.align.horizontal
 		}
+		bg: gears.color {
+			type:  "linear"
+			from:  { 0, 0 }
+			to:    { 0, beautiful.titlebar_size }
+			stops: {
+				{ 0, "#FFFFFF08" }
+				{ 1, "#FFFFFF00" }
+			}
+		}
+		widget: wibox.container.background
+	}
 
-		c.width  = width_before
-		c.height = height_before
-	)
+	c.width  = width_before
+	c.height = height_before

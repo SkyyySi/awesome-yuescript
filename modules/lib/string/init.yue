@@ -1,0 +1,25 @@
+export iter = (inputstr) ->
+	local iterator = 0
+	const strlen = #inputstr
+
+	() ->
+		if iterator >= strlen
+			return
+
+		iterator += 1
+
+		inputstr::sub(iterator, iterator)
+
+export split = (inputstr="", delimiter="%s") ->
+	if not inputstr::match(delimiter)
+		return { inputstr }
+
+	local result = { "" } ---@type string[]
+
+	for s in iter(inputstr)
+		if s == delimiter
+			table.insert(result, "")
+		else
+			result[#result] ..= s
+
+	result

@@ -1,0 +1,209 @@
+import "awful"
+import "gears"
+import "wibox"
+import "beautiful"
+
+import scale, lookup_icon from "modules.lib.theme"
+
+macro LOG = (...) ->
+	args = { ... }
+	len  = select("#", ...)
+
+	local str = ""
+
+	local first = true
+	for i = 1, len
+		const arg = args[i]
+
+		str ..= (if first
+			first = false
+			""
+		else
+			", ") .. "#{arg} = " .. '#{' .. arg .. "}"
+	
+	'notify("' .. str .. '")'
+
+const gen_properties = (names) ->
+	if #names < 1
+		return {}
+
+	const result = {}
+
+	for name in *names
+		result["get_#{name}"] = () =>
+			@_private["inputbox_#{name}"]
+
+		result["set_#{name}"] = (value) =>
+			@_private["inputbox_#{name}"] = value
+			@emit_signal("property::#{name}", @, value)
+			@emit_signal("widget::redraw_needed")
+
+	result
+
+export properties = {
+	--
+}
+
+export get_is_active = () =>
+	@_private["inputboxis_active"]
+
+export start_input_grabber = () =>
+	mousegrabber.run(((mousedata) ->
+		--notify("Running mousegrabber")
+
+		if (true in mousedata.buttons) and ((not mouse.current_widgets) or (@ not in mouse.current_widgets))
+			--notify("Stopping!")
+			@stop_input_grabber()
+			return false
+
+		true
+	), nil)
+
+	@keygrabber::start()
+
+export stop_input_grabber = () =>
+	mousegrabber.stop()
+
+	@keygrabber::stop()
+
+export set_is_active = (is_active) =>
+	@_private["inputboxis_active"] = is_active
+
+	if is_active
+		@start_input_grabber()
+	else
+		@stop_input_grabber()
+
+	--@text = tostring(is_active)
+
+	@emit_signal("property::is_active", @, is_active)
+	@emit_signal("widget::redraw_needed")
+
+export get_text = () =>
+	@get_widgets_by_id("text_display_role")[1].text
+
+export set_text = (text) =>
+	@get_widgets_by_id("text_display_role")[1].text = text
+
+	@emit_signal("property::text", @, text)
+	@emit_signal("widget::redraw_needed")
+
+export get_markup = () =>
+	@get_widgets_by_id("text_display_role")[1].markup
+
+export set_markup = (markup) =>
+	@get_widgets_by_id("text_display_role")[1].markup = markup
+
+	@emit_signal("property::markup", @, markup)
+	@emit_signal("widget::redraw_needed")
+
+export widget_template = {
+	{
+		id:     "text_display_role"
+		widget: wibox.widget.textbox
+	}
+	{
+		id:     "cursor_role"
+		text:   "|"
+		widget: () ->
+			const w = wibox.widget.textbox()
+
+			--
+
+			w
+	}
+}
+
+export.<call> = (cls, kwargs={}) ->
+	with kwargs
+		.discard_input_on_abort ??= true
+
+	const self = wibox.widget(widget_template) -- wibox.widget.textbox() --wibox.widget.base.make_widget(nil, nil, { enable_properties: true })
+		|> gears.table.crush(gen_properties(properties))
+		|> gears.table.crush(cls)
+		|> gears.table.crush(kwargs)
+
+	@_private ??= {}
+
+	@keygrabber = awful.keygrabber {
+		keybindings: {
+			awful.key {
+				modifiers: {}
+				key: "Escape"
+				on_press: () ->
+					if @discard_input_on_abort
+						@text = ""
+					@is_active = false
+			}
+			awful.key {
+				modifiers: {}
+				key: "Tab"
+				on_press: () ->
+					if @next_inputbox?
+						@next_inputbox.is_active = true
+
+					@is_active = false
+			}
+			awful.key {
+				modifiers: { "Shift" }
+				key: "Tab"
+				on_press: () ->
+					if @previous_inputbox?
+						@previous_inputbox.is_active = true
+
+					@is_active = false
+			}
+			awful.key {
+				modifiers: {}
+				key: "Enter"
+				on_press: () ->
+					@is_active = false
+
+					if @submit_input?
+						@submit_input()
+			}
+		}
+		export_keybindings: false
+		start_callback: (keygrabber) ->
+			--$LOG(keygrabber)
+		stop_callback: (keygrabber, stop_key, stop_mods, sequence) ->
+			--$LOG(keygrabber, stop_key, stop_mods, sequence)
+		keypressed_callback: (keygrabber, mod, key, event) ->
+			--$LOG(keygrabber, mod, key, event)
+			@text = keygrabber.sequence
+		keyreleased_callback: (keygrabber, mod, key, event) ->
+			--$LOG(keygrabber, mod, key, event)
+	}
+
+	@is_active = false
+
+	@buttons = {
+		awful.button({}, 1, () ->
+			@is_active = true
+		)
+	}
+
+	do
+		local old_cursor, old_wibox
+
+		@connect_signal("mouse::enter", () ->
+			const wb = mouse.current_wibox
+
+			if not wb
+				return
+
+			old_cursor, old_wibox = wb.cursor, wb
+			wb.cursor = "xterm" 
+		)
+
+		@connect_signal("mouse::leave", () ->
+			if not old_wibox
+				return
+
+			old_wibox.cursor = old_cursor
+			old_wibox = nil
+		)
+
+
+
+	@
