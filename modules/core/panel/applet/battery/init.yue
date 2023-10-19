@@ -1,0 +1,58 @@
+import "awful"
+import "gears"
+import "wibox"
+import "beautiful"
+
+import scale, lookup_icon from "modules.lib.theme"
+
+import "modules.core.panel.common"
+
+import UPowerGlib from "lgi"
+
+export get_battery = () ->
+	for _, device in pairs(UPowerGlib.Client()::get_devices()) do
+		if device::get_object_path()::match("/battery_BAT[0-9]+$") then
+			return device
+
+export get_charge = (battery=get_battery!) ->
+    100 * (battery["energy"] / battery["energy-full"])
+
+export format_charge = (charge=get_charge!) ->
+	const icon = if charge < 6
+		"<span foreground=\"#{beautiful.bg_urgent}\"></span>"
+	elseif charge < 21
+		"<span foreground=\"#{beautiful.bg_urgent}\"></span>"
+	elseif charge < 41
+		""
+	elseif charge < 86
+		""
+
+	"#{icon}   %3.02f%%"::format(charge)
+
+export widget_template = {
+	id:     "percentage_role"
+	widget: wibox.widget.textbox
+}
+
+export.<call> = (cls, kwargs={}) ->
+	with kwargs
+		assert(.screen)
+		assert(.config)
+		assert(.helpers)
+
+	{ :screen, :config, :helpers } = kwargs
+
+	const self = wibox.widget(widget_template)
+		|> gears.table.crush(cls)
+
+	const battery = get_battery()
+	const update = () ->
+		const current_charge = get_charge(battery)
+
+		@get_children_by_id("percentage_role")[1].markup = format_charge(current_charge)
+
+	battery.on_notify = update
+
+	update()
+
+	@

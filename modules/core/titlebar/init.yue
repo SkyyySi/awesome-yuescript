@@ -217,6 +217,7 @@ export.<call> = (_, kwargs={}) ->
 			}
 			{
 				{
+					font:   beautiful.titlebar_font
 					halign: "center"
 					widget: titlewidget(c)
 				}

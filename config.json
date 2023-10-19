@@ -1,9 +1,4 @@
 {
-	env: {
-		QT_QPA_PLATFORMTHEME: "qt5ct"
-	},
-	editor: "code-oss",
-	rules: {},
 	autostart: [
 		[
 			"pasystray"
@@ -20,6 +15,14 @@
 			"%{AWESOME:CONFIG_DIR}/config/picom/picom.conf"
 		]
 	],
+	modkey: "Mod4",
+	terminal: "konsole",
+	rules: {},
+	editor: "code-oss",
+	env: {
+		QT_QPA_PLATFORMTHEME: "qt5ct"
+	},
+	theme: "dracula",
 	panel: {
 		position: {
 			"2": "bottom",
@@ -29,8 +32,5 @@
 			"2": true,
 			"1": true
 		}
-	},
-	theme: "dracula",
-	modkey: "Mod4",
-	terminal: "konsole"
+	}
 }

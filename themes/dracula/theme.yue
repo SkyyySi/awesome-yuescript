@@ -1,15 +1,21 @@
 import "beautiful.theme_assets"
 import "ruled.notification" as rnotification
 const dpi = require("beautiful.xresources").apply_dpi
+import scale from "modules.lib.theme"
+import round from "modules.lib.math"
 
 import "gears.filesystem"
 const theme_path = filesystem.get_configuration_dir() .. "themes/dracula/"
 
 const t = {}
 
-const fontsize = dpi(12) + 0.5 |> math.floor() |> tostring()
-t.font           = "Source Sans Pro, #{fontsize}"
-t.monospace_font = "MesloLGS NF, #{fontsize}"
+t.get_font_size = (n, s) ->
+	(scale(n) / dpi(1, s)) |> round() --|> tostring()
+
+t.font_size = t.get_font_size(12)
+
+t.font           = "Source Sans Pro, #{t.font_size}"
+t.monospace_font = "MesloLGS NF, #{t.font_size}"
 
 t.bg_normal   = "#1E1F29"
 t.bg_focus    = "#bd93f9"
@@ -23,8 +29,8 @@ t.fg_minimize = "#f8f8f2"
 
 t.bg_systray  = "#282a36"
 
-t.useless_gap         = dpi(5)
-t.border_width        = dpi(1)
+t.useless_gap         = scale(5)
+t.border_width        = scale(1)
 t.border_color_normal = "#404040"
 t.border_color_active = "#404040"
 t.border_color_marked = "#404040"
@@ -50,6 +56,8 @@ t.taglist_fg_focus    = "#1E1F29"
 t.taglist_fg_urgent   = "#1E1F29"
 t.taglist_fg_volatile = "#1E1F29"
 
+t.taglist_font = t.monospace_font
+
 --- Tasklist
 t.tasklist_bg_normal   = "#282a36"
 t.tasklist_bg_minimize = "#1E1F29"
@@ -68,14 +76,15 @@ t.titlebar_bg_focus  = "#1E1F29" -- "#2F313F"
 t.titlebar_fg_normal = "#cbcbc5"
 t.titlebar_fg_focus  = "#f8f8f2"
 
-t.titlebar_size = dpi(32)
+t.titlebar_size = scale(32)
+t.titlebar_font = "Source Sans Pro, Semibold #{t.font_size}"
 
 --- Button
 t.button_bg_normal = "#282a36"
 t.button_bg_hover  = "#2F313F"
 t.button_bg_press  = "#44475a"
 
-const taglist_square_size = dpi(128)
+const taglist_square_size = scale(128)
 --t.taglist_squares_sel   = theme_assets.taglist_squares_sel(taglist_square_size, t.fg_normal)
 --t.taglist_squares_unsel = theme_assets.taglist_squares_unsel(taglist_square_size, t.fg_normal)
 
@@ -89,10 +98,12 @@ const taglist_square_size = dpi(128)
 -- menu_[bg|fg]_[normal|focus]
 -- menu_[border_color|border_width]
 --t.menu_submenu_icon = theme_path .. "submenu.png"
-t.menu_height = dpi( 30)
-t.menu_width  = dpi(200)
+t.menu_height = scale( 30)
+t.menu_width  = scale(200)
 
-t.icon_size = dpi(64)
+t.menu_font = t.font
+
+t.icon_size = round(scale(64))
 awesome.set_preferred_icon_size(t.icon_size)
 
 t.titlebar_close_button_normal = theme_path .. "titlebar/close_normal.png"
@@ -121,8 +132,8 @@ t.titlebar_maximized_button_focus_inactive  = theme_path .. "titlebar/maximized_
 t.titlebar_maximized_button_normal_active   = theme_path .. "titlebar/maximized_normal_active.png"
 t.titlebar_maximized_button_focus_active    = theme_path .. "titlebar/maximized_focus_active.png"
 
---t.wallpaper = theme_path .. "background_transparent.png"
-t.wallpaper = theme_path .. "wallpaper.png"
+t.wallpaper = theme_path .. "background_transparent.png"
+--t.wallpaper = theme_path .. "wallpaper.png"
 
 t.layout_fairh      = theme_path .. "layouts/fairhw.png"
 t.layout_fairv      = theme_path .. "layouts/fairvw.png"

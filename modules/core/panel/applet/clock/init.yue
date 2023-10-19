@@ -25,7 +25,7 @@ export.<call> = (_, kwargs={}) ->
 	const base_widget = wibox.widget {
 		nil
 		{
-			font:    "Source Sans Pro, #{math.floor(scale(9) + 0.5)}"
+			font:    "Source Sans Pro, #{beautiful.get_font_size(9)}"
 			halign:  "center"
 			--line_spacing_factor: 0.75 -- This doesn't work when set to a negative value. For... *some* reason.
 			refresh: 1

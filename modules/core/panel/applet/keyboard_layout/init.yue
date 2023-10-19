@@ -27,7 +27,16 @@ export.<call> = (_, kwargs={}) ->
 
 	{ :screen, :config, :helpers } = kwargs
 
-	const widget = awful.widget.keyboardlayout()
+	const widget = wibox.widget {
+		{
+			text:   "󰌌 "
+			widget: wibox.widget.textbox
+		}
+		{
+			widget: awful.widget.keyboardlayout
+		}
+		layout: wibox.layout.fixed.horizontal
+	}
 
 	assert(schema_exists(schema))
 
@@ -36,7 +45,7 @@ export.<call> = (_, kwargs={}) ->
 
 	--notify("Connecting")
 	-- TODO: Doesn't work for some reason...
-	setting.on_changed.connect (key) =>
+	setting.on_changed = (key) =>
 		notify("key = #{key}")
 
 	widget

@@ -95,35 +95,42 @@ export.<call> = (_, kwargs={}) ->
 			@.__update_colors()
 		)
 
-	const taglist = awful.widget.taglist {
-		screen:  kwargs.screen
-		filter:  awful.widget.taglist.filter.all
-		layout:  {
-			spacing: item_spacing
-			layout:  helpers.auto_layout(wibox.layout.fixed) --wibox.layout.fixed[orientation]
+	const taglist = wibox.widget {
+		buttons: {
+			awful.button({}, 4, () -> awful.tag.viewprev(kwargs.screen))
+			awful.button({}, 5, () -> awful.tag.viewnext(kwargs.screen))
 		}
-		widget_template: {
-			{
+		widget: awful.widget.taglist {
+			screen:  kwargs.screen
+			filter:  awful.widget.taglist.filter.all
+			layout:  {
+				spacing: item_spacing
+				layout:  helpers.auto_layout(wibox.layout.fixed) --wibox.layout.fixed[orientation]
+			}
+			widget_template: {
 				{
 					{
-						id:     "index_role"
-						halign: "center"
-						valign: "center"
-						widget: wibox.widget.textbox
+						{
+							id:     "index_role"
+							font:   beautiful.taglist_font
+							halign: "center"
+							valign: "center"
+							widget: wibox.widget.textbox
+						}
+						id:     "padding_role"
+						widget: wibox.container.margin
 					}
-					id:     "padding_role"
-					widget: wibox.container.margin
+					id:     "background_role"
+					widget: wibox.container.background
 				}
-				id:     "background_role"
-				widget: wibox.container.background
-			}
-			shape:        inner_rounded_shape
-			border_width: scale(1)
-			border_color: beautiful.border_color_normal
-			widget:       wibox.container.background
+				shape:        inner_rounded_shape
+				border_width: scale(1)
+				border_color: beautiful.border_color_normal
+				widget:       wibox.container.background
 
-			create_callback: taglist_create_callback
-			update_callback: taglist_update_callback
+				create_callback: taglist_create_callback
+				update_callback: taglist_update_callback
+			}
 		}
 	}
 

@@ -1,0 +1,63 @@
+import "awful"
+import "gears"
+import "wibox"
+import "beautiful"
+
+import scale, lookup_icon from "modules.lib.theme"
+
+import "modules.core.panel.common"
+
+export format_brightness = (value) ->
+	"󰃞   %d%%"::format(value)
+
+export get_brightness = () =>
+	@_private.brightness_value
+
+export set_brightness = (value) =>
+	@_private.brightness_value = value
+
+	@get_children_by_id("text_role")[1].text = format_brightness(value)
+
+export widget_template = {
+	id:     "text_role"
+	widget: wibox.widget.textbox
+}
+
+export.<call> = (cls, kwargs={}) ->
+	with kwargs
+		assert(.screen)
+		assert(.config)
+		assert(.helpers)
+
+	{ :screen, :config, :helpers } = kwargs
+
+	const self = wibox.widget(widget_template)
+		|> gears.table.crush(cls)
+
+	@connect_signal("button::press", (x, y, button) =>
+		switch button
+			when 4
+				awful.spawn { "xbacklight", "-perceived", "-inc", "5" }
+			when 5
+				awful.spawn { "xbacklight", "-perceived", "-dec", "5" }
+	)
+
+	const update = () ->
+		(stdout, stderr, reason, exit_code) <- awful.spawn.easy_async { "xbacklight", "-perceived", "-get" }
+
+		if exit_code > 0
+			return
+
+		const brightness_value = tonumber(stdout)
+
+		@brightness = brightness_value
+
+	gears.timer {
+		timeout:   0.5
+		autostart: true
+		callback:  () -> update()
+	}
+
+	update()
+
+	@

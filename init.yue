@@ -125,7 +125,7 @@ screen.connect_signal("request::wallpaper", (s) ->
 				tiled:  false
 				widget: wibox.container.tile
 			}
-			bg:     beautiful.bg_normal
+			bg:     "#282a36"
 			widget: wibox.container.background
 		}
 	}

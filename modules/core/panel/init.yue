@@ -187,6 +187,18 @@ export.<call> = (cls, kwargs={}) ->
 		:orientation
 	}
 
+	const battery = applet.battery {
+		config: kwargs.config
+		screen: kwargs.screen
+		:helpers
+	}
+
+	const brightness = applet.brightness {
+		config: kwargs.config
+		screen: kwargs.screen
+		:helpers
+	}
+
 	const systray = if kwargs.screen == screen.primary
 		const widget = wibox.widget(wrap_widget {
 			helpers.with_widget(wibox.widget.systray, (w) ->
@@ -298,6 +310,8 @@ export.<call> = (cls, kwargs={}) ->
 				{
 					{
 						--wrap_text_widget(volume(), helpers.get_orientation())
+						brightness
+						battery
 						keyboard_layout
 						clock
 						systray
@@ -327,10 +341,10 @@ export.<call> = (cls, kwargs={}) ->
 		}
 		id:      "margin_role"
 		margins: wibar_margin_without_maximized_clients()
-		buttons: {
-			awful.button({}, 4, () -> awful.tag.viewprev(kwargs.screen))
-			awful.button({}, 5, () -> awful.tag.viewnext(kwargs.screen))
-		}
+		--buttons: {
+		--	awful.button({}, 4, () -> awful.tag.viewprev(kwargs.screen))
+		--	awful.button({}, 5, () -> awful.tag.viewnext(kwargs.screen))
+		--}
 		widget:  wibox.container.margin
 	}
 
