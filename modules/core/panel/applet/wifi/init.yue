@@ -1,0 +1,96 @@
+import "awful"
+import "gears"
+import "wibox"
+import "beautiful"
+
+import scale, lookup_icon from "modules.lib.theme"
+
+import "modules.core.panel.common"
+
+import Gio from "lgi"
+
+-- https://people.freedesktop.org/~lkundrak/nm-docs/nm-dbus-types.html#NMDeviceType
+export nm_device_type = {
+	unknown: 0 -- unknown device
+	ethernet: 1 -- a wired ethernet device
+	wifi: 2 -- an 802.11 WiFi device
+	-- 3 and 4 are unused
+	bluetooth: 5 -- a Bluetooth device supporting PAN or DUN access protocols
+	olpc_mesh: 6 -- an OLPC XO mesh networking device
+	wimax: 7 -- an 802.16e Mobile WiMAX broadband device
+	modem: 8 -- a modem supporting analog telephone, CDMA/EVDO, GSM/UMTS, or LTE network access protocols
+	infiniband: 9 -- an IP-over-InfiniBand device
+	bond: 10 -- a bond master interface
+	vlan: 11 -- an 802.1Q VLAN interface
+	adsl: 12 -- ADSL modem
+	bridge: 13 -- a bridge master interface
+	generic: 14 -- generic support for unrecognized device types
+	team: 15 -- a team master interface
+	tun: 16 -- a TUN or TAP interface
+	ip_tunnel: 17 -- a IP tunnel interface
+	macvlan: 18 -- a MACVLAN interface
+	vxlan: 19 -- a VXLAN interface
+	veth: 20 -- a VETH interface
+}
+
+export widget_template = {
+	id:     "is_connected_image_role"
+	widget: wibox.widget.imagebox
+}
+
+export to_snake_case = (str) ->
+	str
+		::gsub("^[A-Z]", string.lower)
+		::gsub("([a-z])([A-Z])", (a, b) -> "#{a}_#{b::lower()}")
+
+local dbus_proxy
+do
+	local err = nil
+	dbus_proxy, err = Gio.DBusProxy.new_for_bus_sync(
+		Gio.BusType.SYSTEM
+		{ Gio.DBusProxyFlags.NONE }
+		nil
+		"org.freedesktop.NetworkManager"
+		"/org/freedesktop/NetworkManager"
+		"org.freedesktop.NetworkManager"
+	)
+
+	if err != nil
+		error(err)
+
+	dbus_proxy.on_g_properties_changed = (changed_properties, invalidated_properties) =>
+		const { :value } = changed_properties
+
+		awesome.emit_signal("network::wifi::properties_changed", changed_properties)
+
+		for k, v in changed_properties::pairs()
+			awesome.emit_signal("network::wifi::property_changed::#{k}", v.value)
+
+export.<call> = (cls, kwargs={}) ->
+	with kwargs
+		assert(.screen)
+		assert(.config)
+		assert(.helpers)
+
+	{ :screen, :config, :helpers } = kwargs
+
+	const self = wibox.widget(cls.widget_template)
+
+	awesome.connect_signal("network::wifi::property_changed::Connectivity", (value) ->
+		for child in *@get_children_by_id("is_connected_image_role")
+			-- https://people.freedesktop.org/~lkundrak/nm-docs/nm-dbus-types.html#NMConnectivityState
+			child.image = lookup_icon(if value >= 4
+				"network-transmit-receive"
+			else
+				"network-offline"
+			)
+	)
+
+	gears.timer.delayed_call () ->
+		for property in *dbus_proxy::get_cached_property_names()
+			awesome.emit_signal(
+				"network::wifi::property_changed::#{property}"
+				dbus_proxy::get_cached_property(property).value
+			)
+
+	@

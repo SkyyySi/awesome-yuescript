@@ -1,2 +1,5 @@
 *.lua
 !rc.lua
+native/.cache
+native/build
+native/builddir

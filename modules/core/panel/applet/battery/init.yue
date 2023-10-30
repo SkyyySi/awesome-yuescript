@@ -14,6 +14,9 @@ export get_battery = () ->
 		if device::get_object_path()::match("/battery_BAT[0-9]+$") then
 			return device
 
+export has_battery = () ->
+	get_battery() ~= nil
+
 export get_charge = (battery=get_battery!) ->
     100 * (battery["energy"] / battery["energy-full"])
 
@@ -41,6 +44,9 @@ export.<call> = (cls, kwargs={}) ->
 		assert(.helpers)
 
 	{ :screen, :config, :helpers } = kwargs
+
+	if not has_battery()
+		return wibox.widget {}
 
 	const self = wibox.widget(widget_template)
 		|> gears.table.crush(cls)

@@ -40,10 +40,6 @@ const gen_properties = (names) ->
 
 	result
 
-export properties = {
-	--
-}
-
 export get_is_active = () =>
 	@_private["inputboxis_active"]
 
@@ -80,45 +76,65 @@ export set_is_active = (is_active) =>
 	@emit_signal("widget::redraw_needed")
 
 export get_text = () =>
-	@get_widgets_by_id("text_display_role")[1].text
+	@get_children_by_id("text_display_role")[1].text
 
 export set_text = (text) =>
-	@get_widgets_by_id("text_display_role")[1].text = text
+	@get_children_by_id("text_display_role")[1].text = text
 
 	@emit_signal("property::text", @, text)
 	@emit_signal("widget::redraw_needed")
 
 export get_markup = () =>
-	@get_widgets_by_id("text_display_role")[1].markup
+	@get_children_by_id("text_display_role")[1].markup
 
 export set_markup = (markup) =>
-	@get_widgets_by_id("text_display_role")[1].markup = markup
+	@get_children_by_id("text_display_role")[1].markup = markup
 
 	@emit_signal("property::markup", @, markup)
 	@emit_signal("widget::redraw_needed")
 
-export widget_template = {
-	{
-		id:     "text_display_role"
-		widget: wibox.widget.textbox
-	}
-	{
-		id:     "cursor_role"
-		text:   "|"
-		widget: () ->
-			const w = wibox.widget.textbox()
-
-			--
-
-			w
-	}
+export properties = {
+	"inactive_markup"
+	"empty_markup"
 }
 
 export.<call> = (cls, kwargs={}) ->
 	with kwargs
 		.discard_input_on_abort ??= true
+		.inactive_markup ??= "(inactive)"
+		.empty_markup ??= "(empty)"
 
-	const self = wibox.widget(widget_template) -- wibox.widget.textbox() --wibox.widget.base.make_widget(nil, nil, { enable_properties: true })
+	local self
+
+	const widget_template = {
+		{
+			id:     "text_display_role"
+			text:   "Default"
+			widget: wibox.widget.textbox
+		}
+		{
+			id:     "cursor_role"
+			text:   "|"
+			widget: () ->
+				const w = wibox.widget.textbox()
+
+				w.visible = false
+
+				gears.timer {
+					autostart: true
+					timeout:   0.5
+					callback:  () -> w.visible = if not @visible
+						not w.visible
+					else
+						false
+				}
+
+				w
+		}
+		layout: wibox.layout.fixed.horizontal
+	}
+
+	@ = wibox.widget(widget_template) -- wibox.widget.textbox() --wibox.widget.base.make_widget(nil, nil, { enable_properties: true })
 		|> gears.table.crush(gen_properties(properties))
 		|> gears.table.crush(cls)
 		|> gears.table.crush(kwargs)
@@ -176,6 +192,18 @@ export.<call> = (cls, kwargs={}) ->
 	}
 
 	@is_active = false
+
+	const show_hints_callback = () =>
+		if @text != ""
+			return
+
+		if @is_active
+			notify("Empty")
+		else
+			notify("Inactive")
+
+	@connect_signal("property::is_active", show_hints_callback)
+	@connect_signal("property::text",      show_hints_callback)
 
 	@buttons = {
 		awful.button({}, 1, () ->

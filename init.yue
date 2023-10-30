@@ -1,3 +1,5 @@
+os.execute("clear")
+
 pcall(require, "luarocks.loader")
 
 do
@@ -21,6 +23,7 @@ naughty.connect_signal("request::display_error", (message, startup) ->
 )
 
 import "awful"
+awful.menu = require("awful_menu")
 import "gears"
 require "awful.autofocus"
 import "wibox"
@@ -108,6 +111,7 @@ tag.connect_signal("request::default_layouts", () ->
 	}
 )
 
+--[[
 screen.connect_signal("request::wallpaper", (s) ->
 	awful.wallpaper {
 		screen: s
@@ -125,11 +129,12 @@ screen.connect_signal("request::wallpaper", (s) ->
 				tiled:  false
 				widget: wibox.container.tile
 			}
-			bg:     "#282a36"
+			bg:     beautiful.bg_normal
 			widget: wibox.container.background
 		}
 	}
 )
+--]]
 
 screen.connect_signal("request::desktop_decoration", (s) ->
 	awful.tag([ tostring(i) for i = 1, 9 ], s, awful.layout.layouts[1])
@@ -158,19 +163,113 @@ modules.core.rules { :config }
 modules.core.titlebar { :config }
 modules.core.client { :config }
 
+---
+
 --[[
+gears.timer.delayed_call(() ->
+	try
+		modules.lib.x11_tools()
+	catch err
+		notify("ERROR: #{err}", 0)
+)
+--]]
+
+--[ [
 do
+	import "native.native"
+
+	cairo.ImageSurface.apply_blur = (radius) =>
+		native.cairo_image_surface_apply_blur(@_native, radius)
+
+	cairo.ImageSurface.apply_shadow = (radius) =>
+		native.cairo_image_surface_apply_shadow(@_native, radius)
+
 	const box = wibox {
-		height:  scale(50)
+		height:  scale(340)
 		width:   scale(300)
 		visible: true
 		ontop:   true
-		bg:      "#202020"
+		bg:      "#CCCCCC"
 	}
 
 	awful.placement.bottom_left(box, { honor_workarea: true, margins: scale(5) })
 
-	box.widget = wibox.widget {
-		widget: modules.widget.inputbox
+	const textbox = wibox.widget {
+		font:   "Source Sans Pro, Bold #{math.floor(scale(22) + 0.5)}"
+		halign: "center"
+		valign: "center"
+		text:   "Hello, world!"
+		widget: wibox.widget.textbox
+	}
+
+	const imgbox = wibox.widget {
+		forced_height: scale(300)
+		widget: wibox.widget.imagebox
+	}
+
+	-- const source_surface = gears.surface("#{gears.filesystem.get_configuration_dir()}/native/test2.png")
+	const render_text_to_surface = () ->
+		wibox.widget.draw_to_image_surface(textbox, scale(300), scale(300))
+
+	const starting_radius = scale(6)
+
+	const radius_display = wibox.widget {
+		forced_height: scale(40)
+		widget: wibox.widget.textbox
+	}
+
+	const update_blur_radius = (radius) ->
+		radius = math.floor(radius + 0.5)
+
+		radius_display.text = "r=%02d"::format(radius)
+
+		const surface = cairo.ImageSurface.create_from_png("#{config_dir}/native/test1.png")
+		--const surface = render_text_to_surface()
+
+		const surface_processed = if radius < 1
+			--gears.color.recolor_image(surface, "#000000")
+			surface
+		else
+			--gears.surface(surface::apply_shadow(radius))
+			gears.surface(surface::apply_blur(radius))
+
+		imgbox.image = surface_processed
+
+	update_blur_radius(starting_radius)
+
+	const slider = wibox.widget {
+		forced_height: scale(40)
+		bar_shape:     gears.shape.rounded_bar
+		bar_height:    scale(2)
+		bar_color:     "#FF0000"
+		handle_color:  "#0000FF"
+		handle_shape:  gears.shape.circle
+		value:         starting_radius
+		minimum:       0
+		maximum:       25
+		widget:        wibox.widget.slider
+	}
+
+	slider::connect_signal("property::value", () =>
+		update_blur_radius(@value)
+	)
+
+	box.widget = {
+		{
+			{
+				radius_display
+				fg:     "#000000"
+				widget: wibox.container.background
+			}
+			slider
+			spacing: scale(10)
+			layout:  wibox.layout.fixed.horizontal
+		}
+		{
+			imgbox
+			--textbox
+			layout: wibox.layout.stack
+		}
+		layout: wibox.layout.fixed.vertical
 	}
 --]]

@@ -137,6 +137,14 @@ export.<call> = (cls, kwargs={}) ->
 	const clock = applet.clock {
 		screen: kwargs.screen
 		config: kwargs.config
+		:panel
+		:helpers
+	}
+
+	const wifi = applet.wifi {
+		screen: kwargs.screen
+		config: kwargs.config
+		:panel
 		:helpers
 	}
 
@@ -312,8 +320,9 @@ export.<call> = (cls, kwargs={}) ->
 						--wrap_text_widget(volume(), helpers.get_orientation())
 						brightness
 						battery
-						keyboard_layout
+						--keyboard_layout
 						clock
+						wifi
 						systray
 						wrap_widget({
 							kwargs.screen.layoutbox

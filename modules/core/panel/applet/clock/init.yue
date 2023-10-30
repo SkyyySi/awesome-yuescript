@@ -19,8 +19,9 @@ export.<call> = (_, kwargs={}) ->
 		assert(.config)
 		assert(.helpers)
 		assert(.screen)
+		assert(.panel)
 
-	{ :config, :helpers, :screen } = kwargs
+	{ :config, :helpers, :screen, :panel } = kwargs
 
 	const base_widget = wibox.widget {
 		nil
@@ -36,10 +37,28 @@ export.<call> = (_, kwargs={}) ->
 		layout: wibox.layout.align.vertical
 	}
 
-	const shape = (cr, w, h) ->
-		gears.shape.transform(gears.shape.infobubble)
-			::translate(0, 0)
-			::rotate_at(w/2, h/2, math.pi)(cr, w, h, common._outer_spacing_base, common._outer_spacing_base)
+	const shape_factory = () ->
+		const radians = switch helpers.get_position()
+			when "top"
+				0
+			when "bottom"
+				math.pi
+			when "left"
+				math.pi * 1.5
+			when "right"
+				math.pi * 0.5
+
+		(cr, w, h) ->
+			const base_shape = gears.shape.transform(gears.shape.infobubble)
+				::translate(0, 0)
+				::rotate_at(w / 2, h / 2, radians)
+
+			if not helpers.is_horizontal()
+				w, h = h, w
+
+			const size = common._outer_spacing_base
+
+			base_shape(cr, w, h, size, size, (w / 2) - size)
 
 	const calendar = wibox.widget {
 		{
@@ -61,8 +80,10 @@ export.<call> = (_, kwargs={}) ->
 		bg:           beautiful.bg_normal
 		border_width: beautiful.border_width
 		border_color: beautiful.border_color_normal
-		widget:       wibox.container.background
-		:shape
+		widget:       helpers.with_widget(wibox.container.background, (w) ->
+			w.shape = shape_factory()
+		)
+		
 	}
 
 	const calendar_popup = awful.popup {
@@ -72,8 +93,11 @@ export.<call> = (_, kwargs={}) ->
 		ontop:   true
 		visible: false
 		widget:  calendar
-		:shape
 	}
+
+	--panel::connect_signal("wibar::property_updated", () =>
+	--	calendar_popup.shape = shape_factory()
+	--)
 
 	calendar_popup.show = () =>
 		if c = client.focus
@@ -95,17 +119,25 @@ export.<call> = (_, kwargs={}) ->
 
 	const update_calendar_positon = () ->
 		const position = helpers.get_position()
+
 		awful.placement[position](calendar_popup, {
 			honor_workarea: true
-			--margins:        beautiful.useless_gap
+			--margins:        beautiful.useless_gap -- { [position]: beautiful.useless_gap }
 		})
 
 		const widget_geo = mouse.current_widget_geometry
 
-		if helpers.is_horizontal()	
-			calendar_popup.x = widget_geo.x + (widget_geo.width  / 2) - (calendar_popup.width  / 2)
+		if not widget_geo
+			return
+
+		const dir, size = if helpers.is_horizontal()	
+			--calendar_popup.x = widget_geo.x + (widget_geo.width  / 2) - (calendar_popup.width  / 2)
+			"x", "width"
 		else
-			calendar_popup.y = widget_geo.y + (widget_geo.height / 2) - (calendar_popup.height / 2)
+			--calendar_popup.y = widget_geo.y + (widget_geo.height / 2) - (calendar_popup.height / 2)
+			"y", "height"
+
+		calendar_popup[dir] = widget_geo[dir] + (widget_geo[size] / 2) - (calendar_popup[size] / 2)
 
 	base_widget::connect_signal("button::release", (x, y, b) =>
 		if b != 1

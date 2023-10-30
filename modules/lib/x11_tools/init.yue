@@ -1,0 +1,162 @@
+from "gears.filesystem" import get_configuration_dir
+const config_dir = get_configuration_dir()
+
+from "gears.timer" import delayed_call
+
+import "ffi"
+
+do
+	local f = assert(io.open("#{config_dir}/native/x_preprocessed.h"))
+	const text = f::read("*a")
+	f::close()
+	ffi.cdef(text)
+
+--- Wrapper function for all classes to do some meta class stuff
+---@param cls Object
+---@return Object cls
+const make = (cls) ->
+	cls.<tostring> = (_cls) ->
+		"<class '#{_cls.__name}'>"
+
+	cls
+
+---@class (exact) Object
+---@operator call: Object
+---@field package __name "Object"
+---@field package __init fun(self: Object, ...)
+---@field package __class Object
+---@field package __base Object|nil
+---@field package __parent Object|nil
+---@field package __inherited fun(parent: Object, self: self)|nil
+export Object = make class Object
+	get_X: () =>
+		return "TEST"
+
+	---@param key any
+	---@param __cls Object|nil
+	<index>: (key, __cls) =>
+		const base = @.<>
+		const cls = __cls ?? rawget(base, "__class")
+
+		do
+			const value = rawget(base, key)
+
+			if value?
+				return value
+
+		if (type(key) == "string") and (key::match("^[a-zA-Z_][a-zA-Z0-9_]*$"))
+			if getter = rawget(base, "get_#{key}")
+				return getter(@)
+
+		if parent = rawget(cls, "__parent")
+			print(" -> parent = #{parent}")
+			const value = base.__index(@, key, parent)
+			print(" -> value = #{value}")
+			return value
+
+	<tostring>: () =>
+		const class_name = @.<>
+			|> rawget("__class")
+			|> rawget("__name")
+		"<instance of '#{class_name}' at #{'%p'::format(@)}>"
+
+--[[
+print(" * Object = #{Object}")
+print(" * Object() = #{Object()}")
+
+print(" * Object.X = #{Object.X}")
+print(" * Object().X = #{Object().X}")
+
+---@class (exact) SubObject : Object
+---@operator call: SubObject
+---@field package __name "SubObject"
+---@field package __init fun(self: SubObject, ...)
+---@field package __class SubObject
+SubObject = make class SubObject extends Object
+
+print(" ---> SubObject().get_X = #{SubObject().get_X}")
+
+print(" * SubObject = #{SubObject}")
+print(" * SubObject() = #{SubObject()}")
+
+print(" * SubObject.X = #{SubObject.X}")
+print(" * SubObject().X = #{SubObject().X}")
+--]]
+
+---@class X
+---@field Display X.Display
+export X = {}
+
+---@class (exact) X.Display : Object
+---@operator call: X.Display
+---@field package __name "X.Display"
+---@field package __init fun(self: X.Display)
+---@field package __class X.Display
+---@field private _display ffi.cdata*
+---@field private _is_open boolean
+---@field private assert_is_open fun(): boolean
+---@field close fun()
+---@field lock fun()
+---@field unlock fun()
+---@field get_screen fun(display_number: integer): integer
+---@field get_default_screen fun(): integer
+X.Display = make class X.Display extends Object
+	new: () =>
+		@_display = ffi.C.XOpenDisplay(nil)
+		@_is_open = true
+
+	assert_is_open: () =>
+		assert(@_is_open, "Display is closed!")
+
+		@_is_open
+
+	close: () =>
+		@assert_is_open()
+
+		ffi.C.XCloseDisplay(@_display)
+		@_is_open = false
+
+	lock: () =>
+		@assert_is_open()
+
+		ffi.C.XLockDisplay(@_display)
+
+	unlock: () =>
+		@assert_is_open()
+
+		ffi.C.XUnlockDisplay(@_display)
+
+	get_screen: (display_number) =>
+		@assert_is_open()
+
+		ffi.C.XScreenOfDisplay(@_display, display_number)
+
+	get_default_screen: () =>
+		@assert_is_open()
+
+		ffi.C.XDefaultScreenOfDisplay(@_display)
+
+export.<call> = (_, ...) ->
+	local window
+
+	for c in *client.get()
+		if c.class == "firefox"
+			window = c.window
+			break
+
+	if not window
+		return
+
+	const {
+		:XOpenDisplay
+		:XCompositeRedirectWindow
+		:XCompositeNameWindowPixmap
+	} = ffi.C
+
+	const display = XOpenDisplay(nil)
+
+	XCompositeRedirectWindow(display, window, 0)
+
+	const pixmap = XCompositeNameWindowPixmap(display, window)
+
+	--notify("pixmap = '#{pixmap}'", 0)

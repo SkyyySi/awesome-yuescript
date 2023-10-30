@@ -21,4 +21,4 @@ export lookup_gicon = (gicon) ->
 const dpi = require("beautiful.xresources").apply_dpi
 export scale = (value, s=screen.primary) ->
 	const screen_scale = s.scaling_factor ?? 1
-	value * screen_scale * dpi(1, s) * 0.75
+	value * screen_scale * dpi(1, s) -- * 0.75

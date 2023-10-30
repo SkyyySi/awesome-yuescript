@@ -1,2 +1,2 @@
-const submodules = { "battery", "brightness", "clock", "dock", "keyboard_layout", "tag_add_remove", "taglist", "tasklist" }
+const submodules = { "battery", "brightness", "clock", "dock", "keyboard_layout", "tag_add_remove", "taglist", "tasklist", "wifi" }
 export default { name, require(... .. "." .. name) for name in *submodules }
