@@ -4,4 +4,5 @@
 native/.cache
 native/build
 native/builddir
-!native/ini.lua
+!native/init.lua
+!native/test.lua
