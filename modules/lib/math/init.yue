@@ -4,7 +4,7 @@ export clamp = (value, floor, ceiling) ->
 	elseif value < floor
 		floor
 	else
-		floor
+		value
 
 const { floor: math_floor } = math
 export round = (value) ->

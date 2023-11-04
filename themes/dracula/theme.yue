@@ -1,3 +1,4 @@
+import "gears.shape"
 import "beautiful.theme_assets"
 import "ruled.notification" as rnotification
 const dpi = require("beautiful.xresources").apply_dpi
@@ -83,6 +84,22 @@ t.titlebar_font = "Source Sans Pro, Semibold #{t.font_size}"
 t.button_bg_normal = "#282a36"
 t.button_bg_hover  = "#2F313F"
 t.button_bg_press  = "#44475a"
+
+--- wibox.widget.slider
+t.slider_bar_border_color    = t.border_color_normal
+t.slider_bar_border_width    = scale(1)
+t.slider_bar_active_color    = t.fg_normal
+t.slider_bar_color           = t.slider_bar_active_color
+t.slider_bar_height          = scale(2)
+t.slider_bar_margins         = nil
+t.slider_bar_shape           = shape.rounded_bar
+t.slider_handle_border_color = t.border_color_normal
+t.slider_handle_border_width = scale(1)
+t.slider_handle_color        = t.bg_focus
+t.slider_handle_cursor       = nil
+t.slider_handle_margins      = nil
+t.slider_handle_shape        = shape.circle
+t.slider_handle_width        = nil
 
 const taglist_square_size = scale(128)
 --t.taglist_squares_sel   = theme_assets.taglist_squares_sel(taglist_square_size, t.fg_normal)

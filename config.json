@@ -1,6 +1,15 @@
 {
-	theme: "dracula",
 	modkey: "Mod4",
+	panel: {
+		force_compact: {
+			"1": false,
+			"2": true
+		},
+		position: {
+			"1": "top",
+			"2": "top"
+		}
+	},
 	autostart: [
 		[
 			"pasystray"
@@ -18,20 +27,11 @@
 			"%{AWESOME:CONFIG_DIR}/config/picom/picom.conf"
 		]
 	],
-	panel: {
-		position: {
-			"2": "top",
-			"1": "top"
-		},
-		force_compact: {
-			"2": true,
-			"1": true
-		}
-	},
 	terminal: "konsole",
-	rules: {},
-	editor: "code-oss",
 	env: {
 		QT_QPA_PLATFORMTHEME: "qt5ct"
-	}
+	},
+	editor: "code-oss",
+	rules: {},
+	theme: "dracula"
 }

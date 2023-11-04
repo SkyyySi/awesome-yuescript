@@ -1,0 +1,409 @@
+import "awful"
+import "gears"
+import "wibox"
+import "beautiful"
+
+import scale, lookup_icon from "modules.lib.theme"
+from "modules.lib.math" import clamp
+
+import "modules.core.panel.common"
+
+from "lgi" import cairo
+
+if not __PLAYERCTL_SIGNALS_ALREADY_SET_UP
+	global __PLAYERCTL_SIGNALS_ALREADY_SET_UP = true
+
+	awful.spawn.with_line_callback({ "playerctl", "metadata", "--follow", "--format", "{{position}}\t{{mpris:length}}" }, {
+		stdout: (line) ->
+			const position_str, length_str = line::match("(%d+)\t(%d+)")
+			const position, length = tonumber(position_str), tonumber(length_str)
+
+			awesome.emit_signal("playerctl::position", position)
+			awesome.emit_signal("playerctl::length",   length)
+			awesome.emit_signal("playerctl::progress", position * 100 / length, position, length)
+	})
+
+	awful.spawn.with_line_callback({ "playerctl", "metadata", "--follow", "--format", "{{status}}\t{{artist}}\t{{title}}\t{{album}}\t{{playerName}}\t{{volume}}\t{{mpris:artUrl}}\t" }, {
+		stdout: (line) ->
+			const { status, artist, title, album, player_name, volume, art_url } = [i for i in line::gmatch("([^\t]*)\t")]
+
+			for k, v in pairs({ is_playing: status == "Playing", :player_name, :volume, :album, :artist, :title, :art_url })
+				awesome.emit_signal("playerctl::#{k}", v)
+	})
+
+export indicator_widget_template = common.wrap_text_widget {
+	{
+		id:     "song_playing_indicator_icon_role"
+		widget: wibox.widget.imagebox
+	}
+	{
+		{
+			{
+				id:     "song_artist_text_role"
+				widget: wibox.widget.textbox
+			}
+			{
+				text:   " - "
+				widget: wibox.widget.textbox
+			}
+			{
+				id:     "song_title_text_role"
+				widget: wibox.widget.textbox
+			}
+			layout: wibox.layout.align.horizontal
+		}
+		fps:           30
+		speed:         30
+		max_size:      scale(100)
+		step_function: wibox.container.scroll.step_functions.waiting_nonlinear_back_and_forth
+		layout:        wibox.container.scroll.horizontal
+	}
+	spacing: scale(5)
+	layout:  wibox.layout.fixed.horizontal
+}
+
+const make_getter = (name) ->
+	() =>
+		@_private["playerctl_#{name}"]
+
+const set_propety_common = (name, value) =>
+	@_private["playerctl_#{name}"] = value
+	@emit_signal("proerty::#{name}", @, value)
+	@emit_signal("widget::redraw_needed")
+
+const make_setter = (name) ->
+	(value) =>
+		set_propety_common(@, name, value)
+
+export get_song_artist_text = make_getter("song_artist_text")
+export get_song_title_text  = make_getter("song_title_text")
+
+export set_song_artist_text = (value) =>
+	set_propety_common(@, "song_artist_text", value)
+	for child in *@get_children_by_id("song_artist_text_role")
+		child.text = value
+
+export set_song_title_text = (value) =>
+	set_propety_common(@, "song_title_text", value)
+	for child in *@get_children_by_id("song_title_text_role")
+		child.text = value
+
+export get_song_playing_indicator_icon = make_getter("get_song_playing_indicator_icon")
+
+export set_song_playing_indicator_icon = (value) =>
+	set_propety_common(@, "song_playing_indicator_icon", value)
+	for child in *@get_children_by_id("song_playing_indicator_icon_role")
+		child.image = value
+
+const icon_play  = lookup_icon("player_play")
+const icon_pause = lookup_icon("player_pause")
+
+const icon_button_widget_template = {
+	{
+		{
+			{
+				id:     "icon_role"
+				halign: "center"
+				valign: "center"
+				widget: wibox.widget.imagebox
+			}
+			id:      "margin_role"
+			margins: common.item_spacing
+			widget:  wibox.container.margin
+		}
+		id:           "background_role"
+		bg:           beautiful.button_bg_normal
+		border_width: beautiful.border_width
+		border_color: beautiful.border_color_normal
+		shape:        common.inner_rounded_shape
+		widget:       wibox.container.background
+	}
+	id:     "input_detect_role"
+	widget: common.basic_container
+}
+
+const make_icon_button = (icon, on_click_callback) ->
+	common.wrap_constructor(() ->
+		const widget = wibox.widget(icon_button_widget_template)
+
+		const for_icon_role = (fn) ->
+			for child in *widget::get_children_by_id("icon_role")
+				if type(icon) == "function"
+					icon((image) -> child.image = image)
+				else
+					fn(child)
+
+		const for_margin_role = (fn) ->
+			for child in *widget::get_children_by_id("margin_role")
+				fn(child)
+
+		const for_background_role = (fn) ->
+			for child in *widget::get_children_by_id("background_role")
+				fn(child)
+
+		const for_input_detect_role = (fn) ->
+			for child in *widget::get_children_by_id("input_detect_role")
+				fn(child)
+
+		for_icon_role((imagebox) -> imagebox.image = icon)
+
+		for_input_detect_role((input_detector) ->
+			local old_cursor, old_wibox
+
+			const cs = input_detector::connect_signal
+
+			cs("mouse::enter", () =>
+				for_margin_role((margin_container) -> margin_container.margins = common.item_spacing - scale(1))
+				for_background_role((background_container) -> background_container.bg = beautiful.button_bg_hover)
+
+				const wb = mouse.current_wibox
+				
+				if not wb
+					return
+
+				old_cursor, old_wibox = wb.cursor, wb
+				wb.cursor = "hand1" 
+			)
+
+			cs("mouse::leave", () =>
+				for_margin_role((margin_container) -> margin_container.margins = common.item_spacing)
+				for_background_role((background_container) -> background_container.bg = beautiful.button_bg_normal)
+
+				if not old_wibox
+					return
+
+				old_wibox.cursor = old_cursor
+				old_wibox = nil
+			)
+
+			cs("button::press", (x, y, b) =>
+				switch b
+					when 1
+						for_margin_role((margin_container) -> margin_container.margins = common.item_spacing + scale(1))
+						for_background_role((background_container) -> background_container.bg = beautiful.button_bg_press)
+			)
+
+			cs("button::release", (x, y, b) =>
+				switch b
+					when 1
+						for_margin_role((margin_container) -> margin_container.margins = common.item_spacing - scale(1))
+						for_background_role((background_container) -> background_container.bg = beautiful.button_bg_hover)
+						on_click_callback()
+			)
+		)
+
+		widget
+	)
+
+export control_popup_widget_template = {
+	{
+		{
+			{
+				{
+					common.wrap_widget {
+						id:     "song_art_display_image_role"
+						widget: wibox.widget.imagebox
+					}
+					{
+						--common.wrap_widget {
+						--	image:  lookup_icon("player_rew")
+						--	halign: "center"
+						--	widget: wibox.widget.imagebox
+						--}
+						make_icon_button(lookup_icon("player_rew"),   () -> awful.spawn { "playerctl", "previous" })
+						make_icon_button(((callback) ->
+							awesome.connect_signal("playerctl::is_playing", (is_playing) ->
+								callback(if is_playing
+									icon_pause
+								else
+									icon_play
+								)
+							)
+						), () -> awful.spawn { "playerctl", "play-pause" })
+						make_icon_button(lookup_icon("player_fwd"),   () -> awful.spawn { "playerctl", "next" })
+						forced_height: scale(35)
+						spacing: common.item_spacing
+						layout:  wibox.layout.flex.horizontal
+					}
+					{
+						id:            "song_progress_slider_role"
+						forced_height: scale(35)
+						value:         33
+						minimum:       1
+						maximum:       100
+						widget:        wibox.widget.slider
+					}
+					spacing: common.item_spacing
+					layout:  wibox.layout.fixed.vertical
+				}
+				margins: common.item_spacing
+				widget:  wibox.container.margin
+			}
+			width:    scale(300)
+			strategy: "max"
+			widget:   wibox.container.constraint
+		}
+		margins: common.item_spacing
+		widget:  wibox.container.margin
+	}
+	bg:           beautiful.bg_normal
+	border_width: beautiful.border_width
+	border_color: beautiful.border_color_normal
+	shape:        common.inner_rounded_shape
+	widget:       wibox.container.background
+}
+
+export fetch_image_as_surface_async = (url, callback) ->
+	const path = "/tmp/__#{os.getenv('USER')}_playerctl_art_cache"
+
+	(stdout, stderr, reason, exit_code) <- awful.spawn.easy_async({ "curl", "-sSL", url, "--output", path })
+
+	if exit_code > 0
+		return
+
+	const path_png = path .. ".png"
+
+	() <- awful.spawn.easy_async({ "ffmpeg", "-y", "-i", path, path_png })
+
+	const surface = gears.surface(cairo.ImageSurface.create_from_png(path_png))
+
+	callback(surface, surface::get_width(), surface::get_height())
+
+export create_and_attatch_control_popup = (kwargs, indicator) ->
+	const widget = wibox.widget(control_popup_widget_template)
+
+	for child in *widget::get_children_by_id("song_progress_slider_role")
+		child::connect_signal("mouse::enter", () =>
+			child._mouse_over_widget = true
+		)
+
+		child::connect_signal("mouse::leave", () =>
+			child._mouse_over_widget = false
+		)
+
+		child::connect_signal("property::value", (_child) ->
+			if not _child._mouse_over_widget
+				return
+
+			(stdout, stderr, reason, exit_code) <- awful.spawn.easy_async { "playerctl", "metadata", "--format", "{{mpris:length}}" }
+
+			if exit_code > 0
+				return
+
+			const length = tonumber(stdout)
+
+			if not length
+				return
+
+			const position_secs = ((_child.value / 100) * (length / 1000000) + 0.5)
+				|> math.floor()
+				|> tostring()
+
+			awful.spawn { "playerctl", "position", position_secs }
+		)
+
+	awesome.connect_signal("playerctl::progress", (progress, position, length) ->
+		for child in *widget::get_children_by_id("song_progress_slider_role")
+			if child._mouse_over_widget
+				return
+
+			child.value = progress
+	)
+
+	awesome.connect_signal("playerctl::art_url", (art_url) ->
+		(surface, width, height) <- fetch_image_as_surface_async(art_url)
+
+		for child in *widget::get_children_by_id("song_art_display_image_role")
+			child.image = surface
+	)
+
+	const popup = awful.popup {
+		visible: false
+		ontop:   true
+		bg:      gears.color.transparent
+		shape:   common.outer_rounded_shape
+		widget:  widget
+	}
+
+	popup.update_position = () =>
+		awful.placement[kwargs.helpers.get_position()](@, { honor_workarea: true, margins: common.item_spacing })
+
+		if not mouse.current_widgets
+			return
+
+		local index
+		for k, v in pairs(mouse.current_widgets)
+			if v == indicator
+				index = k
+				break
+		if not index
+			return
+
+		local geo = mouse.current_widget_geometries[index]
+
+		const screengeo = kwargs.screen.geometry
+		const dir, size = if kwargs.helpers.is_horizontal()
+			"x", "width"
+		else
+			"y", "height"
+
+		@[dir] = clamp(
+			screengeo[dir] + geo[dir] + (geo[size] / 2) - (@[size] / 2)
+			screengeo[dir] + common.item_spacing
+			screengeo[dir] + screengeo[size] - @[size] - common.item_spacing
+		)
+
+	popup.hide = () =>
+		@visible = false
+
+	popup.show = () =>
+		@visible = true
+		@update_position()
+
+	popup.toggle = () =>
+		if @visible
+			@hide()
+		else
+			@show()
+
+	indicator::connect_signal("button::release", (x, y, b) =>
+		switch b
+			when 1
+				popup::toggle()
+	)
+
+	gears.timer.delayed_call(() -> popup::update_position())
+
+	popup
+
+export.<call> = (cls, kwargs={}) ->
+	with kwargs
+		assert(.screen)
+		assert(.config)
+		assert(.helpers)
+
+	{ :screen, :config, :helpers } = kwargs
+
+	const indicator = wibox.widget(indicator_widget_template)
+		|> gears.table.crush(cls)
+		|> gears.table.crush(kwargs)
+
+	indicator._private ??= {}
+
+	create_and_attatch_control_popup(kwargs, indicator)
+
+	--indicator.song_artist_text = "Hello"
+	--indicator.song_title_text  = "world!"
+
+	awesome.connect_signal("playerctl::title",  (title)  -> indicator.song_title_text  = title)
+	awesome.connect_signal("playerctl::artist", (artist) -> indicator.song_artist_text = artist)
+
+	indicator.song_playing_indicator_icon = icon_pause
+	awesome.connect_signal("playerctl::is_playing", (is_playing) ->
+		indicator.song_playing_indicator_icon = if is_playing
+			icon_pause
+		else
+			icon_play
+	)
+
+	indicator

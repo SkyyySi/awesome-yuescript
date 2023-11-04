@@ -1,2 +1,2 @@
-const submodules = { "functional", "hot_config", "json", "math", "string", "theme", "thread", "x11_tools" }
+const submodules = { "functional", "hot_config", "json", "math", "string", "theme", "thread", --[[ "x11_tools" ]] }
 export default { name, require(... .. "." .. name) for name in *submodules }

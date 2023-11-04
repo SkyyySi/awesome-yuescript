@@ -6,6 +6,7 @@ import "beautiful"
 import scale, lookup_icon from "modules.lib.theme"
 
 import "modules.core.panel.common"
+import basic_container from common
 
 import Gio from "lgi"
 
@@ -33,9 +34,66 @@ export nm_device_type = {
 	veth: 20 -- a VETH interface
 }
 
+-- https://people.freedesktop.org/~lkundrak/nm-docs/nm-dbus-types.html#NMState
+export nm_state = {
+	unknown: 0
+	asleep: 10
+	disconnected: 20
+	disconnecting: 30
+	connecting: 40
+	connected_local: 50
+	connected_site: 60
+	connected_global: 70
+}
+
+export loading_spinner_widget = {
+	get_arc_rotation: () =>
+		@_private.arc_rotation
+
+	set_arc_rotation: (value) =>
+		@_private.arc_rotation = value
+		@emit_signal("property::arc_rotation", value)
+		@emit_signal("widget::redraw_needed")
+
+	draw: (_, cr, w, h) =>
+		notify("cr = #{cr}, w = #{w}, h = #{h}")
+
+	<call>: (cls, kwargs={}) ->
+		const self = wibox.widget.base.make_widget(nil, nil, { enable_properties: true })
+			|> gears.table.crush(cls)
+			|> gears.table.crush(kwargs)
+
+		@_private ??= {}
+
+		@arc_rotation = 0
+
+		gears.timer {
+			autostart: true
+			timeout:   1/5
+			callback:  () ->
+				@arc_rotation = (@arc_rotation + 1) % 360
+		}
+
+		@
+}
+
+const connection_status_visual_role_widgets = {
+	loading: wibox.widget {
+		widget: loading_spinner_widget
+	}
+	offline: wibox.widget {
+		image:  lookup_icon("network-offline")
+		widget: wibox.widget.imagebox
+	}
+	online: wibox.widget {
+		image:  lookup_icon("network-transmit-receive")
+		widget: wibox.widget.imagebox
+	}
+}
+
 export widget_template = {
-	id:     "is_connected_image_role"
-	widget: wibox.widget.imagebox
+	id:     "connection_status_visual_role"
+	widget: basic_container
 }
 
 export to_snake_case = (str) ->
@@ -76,14 +134,16 @@ export.<call> = (cls, kwargs={}) ->
 
 	const self = wibox.widget(cls.widget_template)
 
-	awesome.connect_signal("network::wifi::property_changed::Connectivity", (value) ->
-		for child in *@get_children_by_id("is_connected_image_role")
-			-- https://people.freedesktop.org/~lkundrak/nm-docs/nm-dbus-types.html#NMConnectivityState
-			child.image = lookup_icon(if value >= 4
-				"network-transmit-receive"
-			else
-				"network-offline"
-			)
+	awesome.connect_signal("network::wifi::property_changed::State", (value) ->
+		const index = if value >= 50
+			--	"online"
+			--elseif value >= 30
+			"loading"
+		else
+			"offline"
+
+		for child in *@get_children_by_id("connection_status_visual_role")
+			child.widget = connection_status_visual_role_widgets[index]
 	)
 
 	gears.timer.delayed_call () ->

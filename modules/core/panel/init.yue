@@ -141,7 +141,7 @@ export.<call> = (cls, kwargs={}) ->
 		:helpers
 	}
 
-	const wifi = applet.wifi {
+	const network = applet.network {
 		screen: kwargs.screen
 		config: kwargs.config
 		:panel
@@ -165,7 +165,7 @@ export.<call> = (cls, kwargs={}) ->
 
 		@emit_signal("property::size", @, value)
 
-	panel.size = wibar_size_without_maximized_clients
+	panel.size = wibar_size_with_maximized_clients -- wibar_size_without_maximized_clients
 
 	const taglist = applet.taglist {
 		screen: kwargs.screen
@@ -207,6 +207,12 @@ export.<call> = (cls, kwargs={}) ->
 		:helpers
 	}
 
+	const playerctl = applet.playerctl {
+		config: kwargs.config
+		screen: kwargs.screen
+		:helpers
+	}
+
 	const systray = if kwargs.screen == screen.primary
 		const widget = wibox.widget(wrap_widget {
 			helpers.with_widget(wibox.widget.systray, (w) ->
@@ -231,10 +237,10 @@ export.<call> = (cls, kwargs={}) ->
 		widget
 
 	const wibar_margin_without_maximized_clients = () -> {
-		top:    if position == "bottom" then 0 else beautiful.useless_gap*2
-		bottom: if position == "top"    then 0 else beautiful.useless_gap*2
-		left:   if position == "right"  then 0 else beautiful.useless_gap*2
-		right:  if position == "left"   then 0 else beautiful.useless_gap*2
+		top:    if position == "bottom" then 0 else beautiful.useless_gap * 2
+		bottom: if position == "top"    then 0 else beautiful.useless_gap * 2
+		left:   if position == "right"  then 0 else beautiful.useless_gap * 2
+		right:  if position == "left"   then 0 else beautiful.useless_gap * 2
 	}
 
 	const wibar_margin_with_maximized_clients = () -> {
@@ -322,7 +328,8 @@ export.<call> = (cls, kwargs={}) ->
 						battery
 						--keyboard_layout
 						clock
-						wifi
+						playerctl
+						network
 						systray
 						wrap_widget({
 							kwargs.screen.layoutbox
@@ -348,8 +355,8 @@ export.<call> = (cls, kwargs={}) ->
 			bg:           beautiful.bg_normal
 			widget:       wibox.container.background
 		}
-		id:      "margin_role"
-		margins: wibar_margin_without_maximized_clients()
+		--id:      "margin_role"
+		--margins: wibar_margin_without_maximized_clients()
 		--buttons: {
 		--	awful.button({}, 4, () -> awful.tag.viewprev(kwargs.screen))
 		--	awful.button({}, 5, () -> awful.tag.viewnext(kwargs.screen))
@@ -389,11 +396,20 @@ export.<call> = (cls, kwargs={}) ->
 			-- Error
 			return
 
+		panel.margins = if has_maximized_client
+			wibar_margin_with_maximized_clients()
+		else
+			wibar_margin_without_maximized_clients()
+
+		const panel_shape = if has_maximized_client
+			gears.shape.rectangle
+		else
+			outer_rounded_shape
+		
+		panel.shape = panel_shape
+
 		for child in *panel.widget::get_children_by_id("background_role")
-			child.shape = if has_maximized_client
-				gears.shape.rectangle
-			else
-				outer_rounded_shape
+			child.shape = panel_shape
 
 			child.border_width = if has_maximized_client
 				0
@@ -401,20 +417,20 @@ export.<call> = (cls, kwargs={}) ->
 				beautiful.border_width
 
 		for child in *panel.widget::get_children_by_id("margin_role")
-			child.margins = if has_maximized_client
-				wibar_margin_with_maximized_clients()
-			else
-				wibar_margin_without_maximized_clients()
+			--child.margins = if has_maximized_client
+			--	wibar_margin_with_maximized_clients()
+			--else
+			--	wibar_margin_without_maximized_clients()
 
 			child.color = if has_maximized_client
 				beautiful.border_color_normal
 			else
 				nil
 
-		panel.size = if has_maximized_client
-			wibar_size_with_maximized_clients
-		else
-			wibar_size_without_maximized_clients
+		--panel.size = if has_maximized_client
+		--	wibar_size_with_maximized_clients
+		--else
+		--	wibar_size_without_maximized_clients
 	)
 
 	update_position_and_orientation(kwargs.config)

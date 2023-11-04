@@ -1,2 +1,13 @@
-const submodules = { "battery", "brightness", "clock", "dock", "keyboard_layout", "tag_add_remove", "taglist", "tasklist", "wifi" }
-export default { name, require(... .. "." .. name) for name in *submodules }
+--const submodules = { "battery", "brightness", "clock", "dock", "keyboard_layout", "network", "tag_add_remove", "taglist", "tasklist" }
+--export default { name, require(... .. "." .. name) for name in *submodules }
+
+const module_path = ...
+
+export default {
+	<index>: (key) =>
+		do
+			const t = type(key)
+			assert(t == "string", "Namespace indecies can only be strings, got: #{t}")
+
+		require("#{module_path}.#{key}")
+}

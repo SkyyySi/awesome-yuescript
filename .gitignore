@@ -1,5 +1,7 @@
 *.lua
 !rc.lua
+!awful_menu.lua
 native/.cache
 native/build
 native/builddir
+!native/ini.lua
