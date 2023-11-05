@@ -1,5 +1,5 @@
 project(
-	'native',
+	'surface_filter',
 	'c',
 	version: '0.1',
 	default_options: [
@@ -20,10 +20,9 @@ dependencies = [
 ]
 
 shared_library(
-	'native',
-	'native.c',
+	'surface_filter',
+	['src/surface_filter.c', 'src/util.c'],
 	name_prefix: '',
 	install: true,
 	dependencies: dependencies,
-	#c_args: ['-g3'],
 )

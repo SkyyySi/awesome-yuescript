@@ -1,5 +1,8 @@
 {
-	modkey: "Mod4",
+	env: {
+		QT_QPA_PLATFORMTHEME: "qt5ct"
+	},
+	terminal: "konsole",
 	panel: {
 		force_compact: {
 			"1": false,
@@ -27,11 +30,8 @@
 			"%{AWESOME:CONFIG_DIR}/config/picom/picom.conf"
 		]
 	],
-	terminal: "konsole",
-	env: {
-		QT_QPA_PLATFORMTHEME: "qt5ct"
-	},
+	theme: "dracula",
 	editor: "code-oss",
 	rules: {},
-	theme: "dracula"
+	modkey: "Mod4"
 }

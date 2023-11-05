@@ -1,4 +1,4 @@
-import "native.native"
+import "surface_filter.surface_filter"
 
 from "lgi" import cairo
 

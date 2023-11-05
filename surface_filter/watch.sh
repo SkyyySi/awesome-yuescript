@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
+
 function compile() {
 	clear
 	meson compile -C "$PWD/builddir"
@@ -7,6 +9,6 @@ function compile() {
 
 compile
 
-while inotifywait -e close_write native.c -qq; do
+while inotifywait -e close_write -qq -r 'src/'; do
 	compile
 done

@@ -1,5 +1,5 @@
--- [yue]: ./native/test.yue
-local native = require("native.native") -- 1
+-- [yue]: ./surface_filter/test.yue
+local surface_filter = require("surface_filter.surface_filter") -- 1
 local cairo -- 3
 do -- 3
 	local _obj_0 = require("lgi") -- 3

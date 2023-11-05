@@ -18,6 +18,10 @@
 		"span": "c",
 		"random": "c",
 		"cairo.h": "c",
-		"system_error": "c"
+		"system_error": "c",
+		"util.h": "c",
+		"surface_filter.h": "c",
+		"stdlib.h": "c",
+		"bit": "c"
 	}
 }

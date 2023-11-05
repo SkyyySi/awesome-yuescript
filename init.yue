@@ -176,51 +176,50 @@ gears.timer.delayed_call(() ->
 
 --[ [
 do
-	import "native"
+	import "surface_filter"
 
 	const box = wibox {
 		height:  scale(300)
 		width:   scale(300)
 		visible: true
 		ontop:   true
-		bg:      "#202020"
+		bg:      "#FFFFFF"
 	}
 
 	awful.placement.bottom_left(box, { honor_workarea: true, margins: scale(5) })
 
-	box.widget = {
-		{
-			{
-				image:  "#{gears.filesystem.get_configuration_dir()}/native/test2.png"
-				halign: "center"
-				valign: "center"
-				widget: wibox.widget.imagebox
-			}
-			dual_pass: true
-			radius: 5
-			widget: native.blur
-		}
+	const base_widget = wibox.widget {
 		{
 			id:     "text_role"
-			text:   "T"
-			--text:   "This is a test message!"
+			text:   "This"
 			font:   "Source Sans Pro, Bold 18"
 			halign: "center"
 			valign: "center"
 			widget: wibox.widget.textbox
 		}
-		layout: wibox.layout.stack -- flex.horizontal
+		fg:     "#FFFFFF"
+		widget: wibox.container.background
 	}
 
-	const text = "This is a test message!"
-	local count = 1
-	const textbox = box.widget::get_children_by_id("text_role")[1]
-	const timer = gears.timer {
+	const text = "This is a sample text"
+	local count = #(base_widget::get_children_by_id("text_role")[1].text)
+	gears.timer {
 		timeout:   0.1
 		autostart: true
 		callback:  () ->
 			count += 1
-			textbox.text = text::sub(1, count)
+			base_widget::get_children_by_id("text_role")[1].text = text::sub(1, count)
+	}
+
+	box.widget = {
+		{
+			base_widget
+			dual_pass: true
+			radius:    6
+			widget:    surface_filter.shadow
+		}
+		base_widget
+		layout: wibox.layout.stack
 	}
 --]]
 
